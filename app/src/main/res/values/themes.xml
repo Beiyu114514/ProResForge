@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  契约 §8.3:主题名 Theme.ProResForge,父级 Theme.Material3.DayNight.NoActionBar
+  (父级来自 com.google.android.material:material,已在 app/build.gradle.kts 引入)。
+  Compose 界面不读取此主题的控件样式,这里只固化颜色与系统栏。
+
+  U-01:本文件是「浅色」变体,深色配置在 values-night/themes.xml。
+  - windowLightStatusBar 不再写死 false(浅色下白图标叠白底 = 状态栏内容不可见);
+  - 系统栏颜色改为透明,由 MainActivity 的 enableEdgeToEdge() 统一决定图标明暗。
+-->
+<resources>
+
+    <style name="Theme.ProResForge" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/brand_orange</item>
+        <item name="colorOnPrimary">@color/brand_on_orange</item>
+        <item name="colorSecondary">@color/brand_orange_dark</item>
+        <item name="android:colorBackground">@color/window_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
+</resources>

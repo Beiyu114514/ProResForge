@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  启动图标前景层(胶片 + 播放键),108x108 viewport。
+  内容全部限制在中心 72x72 安全区(18..90)内,以保证自适应图标裁切安全。
+  纯 path 绘制,不使用渐变,颜色一律 #RRGGBB。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 胶片两侧齿孔:左右各 3 枚(暗橙) -->
+    <path
+        android:fillColor="#E2620A"
+        android:pathData="M27,31 h5 a2,2 0 0 1 2,2 v6 a2,2 0 0 1 -2,2 h-5 a2,2 0 0 1 -2,-2 v-6 a2,2 0 0 1 2,-2 z
+            M27,49 h5 a2,2 0 0 1 2,2 v6 a2,2 0 0 1 -2,2 h-5 a2,2 0 0 1 -2,-2 v-6 a2,2 0 0 1 2,-2 z
+            M27,67 h5 a2,2 0 0 1 2,2 v6 a2,2 0 0 1 -2,2 h-5 a2,2 0 0 1 -2,-2 v-6 a2,2 0 0 1 2,-2 z
+            M76,31 h5 a2,2 0 0 1 2,2 v6 a2,2 0 0 1 -2,2 h-5 a2,2 0 0 1 -2,-2 v-6 a2,2 0 0 1 2,-2 z
+            M76,49 h5 a2,2 0 0 1 2,2 v6 a2,2 0 0 1 -2,2 h-5 a2,2 0 0 1 -2,-2 v-6 a2,2 0 0 1 2,-2 z
+            M76,67 h5 a2,2 0 0 1 2,2 v6 a2,2 0 0 1 -2,2 h-5 a2,2 0 0 1 -2,-2 v-6 a2,2 0 0 1 2,-2 z" />
+
+    <!-- 中央画格:外框 + 内孔,evenOdd 得到圆角描边(亮橙) -->
+    <path
+        android:fillColor="#FF7A1A"
+        android:fillType="evenOdd"
+        android:pathData="M44,32 H64 A7,7 0 0 1 71,39 V69 A7,7 0 0 1 64,76 H44 A7,7 0 0 1 37,69 V39 A7,7 0 0 1 44,32 Z
+            M44,35.5 H64 A3.5,3.5 0 0 1 67.5,39 V69 A3.5,3.5 0 0 1 64,72.5 H44 A3.5,3.5 0 0 1 40.5,69 V39 A3.5,3.5 0 0 1 44,35.5 Z" />
+
+    <!-- 播放键:用图标底色(#0E1116)做镂空,保证在深色背景上读起来是"播放"而不是色块 -->
+    <path
+        android:fillColor="#0E1116"
+        android:pathData="M46,45 L62,54 L46,63 Z" />
+
+</vector>

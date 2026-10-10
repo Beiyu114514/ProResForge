@@ -1,0 +1,38 @@
+# ProResForge .gitignore
+
+# FFmpeg 预编译产物(每个 ABI 约 30~60MB,由 scripts/build-ffmpeg-android.sh 生成)
+app/src/main/cpp/prebuilt/
+
+# 构建产物:APK / AAB / 临时分发目录(体积大且不可复现,切勿提交)
+*.apk
+*.aab
+/dist/
+/tmp/
+
+# 本地 SDK / NDK 路径(带本机绝对路径,切勿提交)
+local.properties
+
+# Gradle
+.gradle/
+build/
+app/build/
+captures/
+.cxx/
+.kotlin/
+*.iml
+
+# 签名(keystore / 密钥口令)一律不入库
+*.jks
+*.keystore
+keystore.properties
+
+# 第三方素材样本(DNG zip 等,有版权风险,切勿提交)
+*.zip
+
+# IDE / OS
+.idea/
+.DS_Store
+Thumbs.db
+
+# 本地工具忽略列表(与 .gitignore 双份维护,两者同步更新)
+.zcodeignore

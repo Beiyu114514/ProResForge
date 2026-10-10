@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 主色系:深蓝黑底 + 橙色强调。XML 侧只用于窗口背景与系统栏;
+     窗口背景随系统深浅色切换(深色值在 values-night/colors.xml,其余颜色不变)。 -->
+<resources>
+
+    <!-- 深蓝黑(背景 / 图标底色) -->
+    <color name="ic_launcher_background">#0E1116</color>
+    <color name="brand_surface">#0E1116</color>
+
+    <!-- 橙(主强调) -->
+    <color name="brand_orange">#FF7A1A</color>
+    <color name="brand_orange_dark">#E2620A</color>
+    <color name="brand_on_orange">#1A0E00</color>
+
+    <!-- 琥珀(次要强调) -->
+    <color name="brand_amber">#F2A03D</color>
+
+    <!-- U-01:窗口背景(浅色,与 Compose 侧的 BrandInkLight 一致) -->
+    <color name="window_background">#F5F7FC</color>
+
+</resources>

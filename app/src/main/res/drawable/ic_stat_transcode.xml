@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  状态栏/通知小图标(白 + 透明,系统会自己上色)。
+  图案:胶片框 + 播放键(与启动图标同一语汇),24dp viewport。
+  不要用带彩色/带背景的图(ic_launcher_foreground 是橙色),通知里会被
+  系统渲成灰色块或直接显示异常。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+
+    <!-- 胶片外框(留 1dp 边距给状态栏缩放) -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M3,4 H21 A1,1 0 0 1 22,5 V19 A1,1 0 0 1 21,20 H3 A1,1 0 0 1 2,19 V5 A1,1 0 0 1 3,4 Z
+            M5,6 H19 V18 H5 Z" />
+
+    <!-- 播放键(镂空,与 launcher 前景一致) -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M10,9 L16,12 L10,15 Z" />
+
+    <!-- 顶部两枚齿孔 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M4,2 h2 v2 h-2 z M18,2 h2 v2 h-2 z" />
+
+</vector>

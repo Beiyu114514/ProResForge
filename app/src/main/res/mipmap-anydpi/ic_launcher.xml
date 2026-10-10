@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  API 24-25 启动图标回退:这些版本不认识 <adaptive-icon>(需要 API 26+)。
+  本项目不提交二进制 PNG,因此用"色块 + 内嵌矢量前景"的合法 XML drawable 等效替代,
+  由资源解析规则保证版本选择:
+    - API 26+        -> mipmap-anydpi-v26/ic_launcher.xml(自适应图标,优先级更高)
+    - API 24-25      -> 本文件(mipmap-anydpi 无版本限定,anydpi-v26 被版本限定符过滤掉)
+  视觉上与自适应图标一致:底色铺满,前景等比缩进居中。
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:drawable="@color/ic_launcher_background" />
+
+    <item android:gravity="center">
+        <inset
+            android:drawable="@drawable/ic_launcher_foreground"
+            android:inset="14dp" />
+    </item>
+
+</layer-list>

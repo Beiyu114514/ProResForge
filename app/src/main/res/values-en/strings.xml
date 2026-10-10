@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- English fallback; keys must stay in sync with values/strings.xml -->
+<resources>
+
+    <string name="app_name">ProResForge</string>
+    <string name="app_tagline">ProRes / MOV → MP4 / WebM, hardware encoding first</string>
+
+    <string name="tab_transcode">Transcode</string>
+    <string name="tab_jobs">Jobs</string>
+    <string name="tab_history">History</string>
+
+    <string name="pick_files">Pick files</string>
+    <string name="pick_files_hint">Pick videos from storage or the MotionCam gallery; multi-select supported</string>
+    <string name="fallback_file_name">Untitled file</string>
+    <string name="file_probing">Reading…</string>
+    <string name="file_unparseable">Not supported</string>
+    <string name="btn_remove_file">Remove</string>
+    <string name="files_title">Media files</string>
+
+    <string name="pick_lut">LUT</string>
+    <string name="lut_pick_action">Choose LUT</string>
+    <string name="lut_none">No LUT</string>
+    <string name="lut_intensity">LUT intensity</string>
+    <string name="lut_strength">%1$d%%</string>
+    <string name="lut_preview_before">Original</string>
+    <string name="lut_preview_after">Graded</string>
+    <string name="btn_clear_lut">Remove LUT</string>
+
+    <string name="format_title">Output format</string>
+    <string name="tenbit_toggle">10-bit encoding (smoother gradients)</string>
+    <string name="quality_title">Quality</string>
+    <string name="quality_high">High</string>
+    <string name="quality_medium">Medium</string>
+    <string name="quality_low">Low</string>
+    <string name="scale_title">Resolution</string>
+    <string name="fps_title">Frame rate</string>
+    <string name="audio_title">Audio</string>
+    <string name="audio_copy">Copy stream</string>
+    <string name="audio_aac">Re-encode AAC</string>
+    <string name="audio_drop">Drop audio</string>
+
+    <!-- Labels for model.kt enum labelRes; container names and numbers stay as-is -->
+    <string name="fmt_h264">MP4 · H.264</string>
+    <string name="fmt_h265">MP4 · H.265</string>
+    <string name="fmt_vp9">WebM · VP9</string>
+    <string name="fmt_prores">MOV · ProRes</string>
+    <string name="scale_orig">Original</string>
+    <string name="scale_1080">1080p</string>
+    <string name="scale_720">720p</string>
+    <string name="scale_50">50%</string>
+    <string name="scale_25">25%</string>
+    <string name="fps_orig">Original</string>
+    <string name="fps_60">60</string>
+    <string name="fps_30">30</string>
+    <string name="fps_24">24</string>
+    <string name="fps_25">25</string>
+    <string name="fps_48">48</string>
+    <string name="fps_50">50</string>
+
+    <!-- DNG sequence zip (MotionCam) -->
+    <string name="dng_quality_title">Demosaic quality</string>
+    <string name="dng_color_title">White balance</string>
+    <string name="dngq_fast">Fast</string>
+    <string name="dngq_balanced">Balanced</string>
+    <string name="dngq_fine">Fine</string>
+    <string name="dngcolor_camera">Camera WB</string>
+    <string name="dngcolor_auto">Auto WB</string>
+    <string name="dngcolor_d65">Fixed daylight</string>
+    <string name="dngmap_title">Color mapping</string>
+    <string name="dngmap_none">Linear</string>
+    <string name="dngmap_applelog">Apple Log</string>
+    <string name="dng_zip_hint">DNG sequence zip: %1$d frames · %2$d×%3$d. Pick a frame rate (25 by
+        default). Estimated time about %4$s (runs in background; you may leave this screen).</string>
+    <string name="dng_zip_hint_res">Large source (%1$d×%2$d): Fine is extremely slow — 1080p +
+        Balanced is recommended.</string>
+    <string name="dng_zip_hint_frames">%1$d min</string>
+
+    <string name="output_dir_title">Output folder</string>
+    <string name="output_dir_default">Movies/ProResForge</string>
+    <string name="output_dir_unset">No output folder selected</string>
+    <string name="output_dir_current">Current folder</string>
+    <string name="output_dir_pick">Select folder</string>
+    <string name="output_dir_change">Change folder</string>
+    <string name="btn_start">Start</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_busy">Working…</string>
+    <string name="start_hint_pick_files">Pick files to convert first</string>
+    <string name="start_hint_probing">Reading file information…</string>
+    <string name="start_hint_unparseable">Some files could not be read — remove them and try again</string>
+    <string name="start_hint_output_dir">Select an output folder before starting</string>
+    <string name="notification_rationale_title">Allow transcode notifications?</string>
+    <string name="notification_rationale_message">Notifications show background progress and completion. Transcoding continues even if you do not allow them.</string>
+    <string name="notification_allow">Allow notifications</string>
+    <string name="notification_skip">Not now</string>
+    <string name="advanced_settings">Advanced settings</string>
+    <string name="advanced_show">Show</string>
+    <string name="advanced_hide">Hide</string>
+
+    <!-- Generic: progress / placeholder -->
+    <string name="progress_indeterminate">…</string>
+
+    <string name="media_title">Media info</string>
+    <string name="media_empty">Source info appears after picking files</string>
+    <string name="media_hdr_hint">HDR source detected — apply a tonemap LUT before converting to SDR</string>
+    <string name="fact_codec">Codec</string>
+    <string name="fact_resolution">Resolution</string>
+    <string name="fact_fps">Frame rate</string>
+    <string name="fact_duration">Duration</string>
+    <string name="fact_pixfmt">Pixel format</string>
+    <string name="fact_bitrate">Bitrate</string>
+    <string name="fact_frames">Frames</string>
+    <string name="fact_audio">Audio</string>
+    <string name="fact_audio_none">No audio track</string>
+    <string name="fact_color">Color</string>
+    <string name="fact_file">File</string>
+    <string name="fact_size">Size</string>
+    <string name="fact_lut">LUT</string>
+    <string name="fact_lut_grid">LUT grid</string>
+    <string name="fact_lut_value">%1$s · %2$d%%</string>
+    <string name="fact_started_at">Started</string>
+    <string name="fact_rotation">rotated %1$d°</string>
+    <string name="preview_none">No preview</string>
+
+    <string name="quality_desc_prores">Master quality: ProRes 422 HQ (prores_ks); quality tier is ignored</string>
+    <string name="quality_desc_vp9">VP9 CQ %1$d — %2$s</string>
+    <string name="quality_desc_crf">CRF %1$d — %2$s</string>
+    <string name="quality_lower_is_better">lower means better quality</string>
+
+    <string name="jobs_empty">No transcode jobs</string>
+    <string name="job_state_current">%1$s · current job</string>
+    <string name="btn_clear_finished">Clear finished</string>
+    <string name="stage_queued">Queued</string>
+    <string name="stage_init">Preparing</string>
+    <string name="stage_decode">Transcoding</string>
+    <string name="stage_audio">Audio</string>
+    <string name="stage_finalize">Finalizing</string>
+    <string name="stage_done">Done</string>
+    <string name="stage_error">Error</string>
+
+    <string name="job_state_queued">Queued</string>
+    <string name="job_state_running">Running</string>
+    <string name="job_state_done">Done</string>
+    <string name="job_state_failed">Failed</string>
+    <string name="job_state_cancelled">Cancelled</string>
+
+    <string name="err_unsupported">Output format or encoder unsupported</string>
+    <string name="err_invalid_input">Input file is damaged or cannot be decoded</string>
+    <string name="err_ffmpeg">FFmpeg error code %1$d</string>
+    <string name="err_probe">Cannot read input</string>
+    <string name="err_fd">Cannot open input or output file</string>
+    <string name="err_native_call">FFmpeg call failed</string>
+    <string name="err_spec">Invalid %1$s parameters, cannot start transcoding</string>
+    <string name="err_enqueue_failed">Could not create the job, please try again</string>
+    <string name="notif_channel_name">Transcode jobs</string>
+    <string name="notif_channel_desc">Shows transcode progress and results</string>
+    <string name="notif_channel_done_name">Transcode results</string>
+    <string name="notif_running">Transcoding %1$d%%</string>
+    <string name="notif_done">Done: %1$s</string>
+    <string name="notif_failed">Failed: %1$s</string>
+
+    <string name="share">Share</string>
+    <string name="open">Open</string>
+    <string name="btn_logs">Logs</string>
+    <string name="toast_no_logs">No logs yet</string>
+    <string name="btn_clear_history">Clear history</string>
+    <string name="history_title">History</string>
+    <string name="history_empty">No history yet</string>
+    <string name="history_clear_title">Clear history?</string>
+    <string name="history_clear_message">This removes all history records but does not delete exported files.</string>
+    <string name="history_clear_cancel">Cancel</string>
+    <string name="history_clear_confirm">Clear</string>
+    <string name="toast_bad_out_uri">Invalid output address</string>
+    <string name="toast_no_app_to_open">No app can open this file</string>
+    <string name="toast_share_failed">Sharing failed</string>
+
+    <string name="msg_files_picked">%1$d file(s) selected</string>
+    <string name="msg_lut_loaded">LUT loaded: %1$s</string>
+    <string name="msg_lut_invalid">Failed to parse LUT file</string>
+    <string name="msg_output_dir_updated">Output folder updated</string>
+    <string name="msg_out_create_failed">Cannot create output file: %1$s</string>
+    <string name="msg_queued">Queued %1$d job(s)</string>
+    <string name="btn_view_jobs">View jobs</string>
+    <string name="err_no_output_dir">Select an output folder first</string>
+    <string name="err_unprobeable">Some files could not be read — remove them or pick others and try again</string>
+
+    <!-- HistoryScreen: open-source licenses (S-2, texts live in assets/licenses/) -->
+    <string name="btn_licenses">Licenses</string>
+    <string name="licenses_title">Open-source licenses &amp; acknowledgements</string>
+    <string name="licenses_close">Close</string>
+    <string name="licenses_load_failed">Failed to read license files</string>
+
+</resources>

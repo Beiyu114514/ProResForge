@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- U-01:深色模式只需覆盖窗口背景,其余颜色沿用 values/colors.xml。 -->
+<resources>
+    <color name="window_background">#0E1116</color>
+</resources>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  API 24-25 圆形启动图标回退:与 mipmap-anydpi/ic_launcher.xml 同样的思路,
+  仅把底色换成圆角矩形(近似圆形蒙版效果)。不依赖任何二进制位图。
+  API 26+ 走 mipmap-anydpi-v26/ic_launcher_round.xml。
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="20dp" />
+            <solid android:color="@color/ic_launcher_background" />
+        </shape>
+    </item>
+
+    <item android:gravity="center">
+        <inset
+            android:drawable="@drawable/ic_launcher_foreground"
+            android:inset="14dp" />
+    </item>
+
+</layer-list>

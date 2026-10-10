@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  data_extraction_rules (M-5b, Android 12+):
+  ProResForge 的持久数据只有 logs/、cacheDir/luts 这类不可跨设备恢复的东西,
+  以及指向 SAF 树的 URI 偏好。授权 URI 不会随备份恢复,还原出一个失效的
+  「上次输出目录/LUT」状态只会误导用户,所以云备份/换机传输一律整机排除。
+  注:2026-10-06 删掉两处 <exclude domain="device_external"> —— 该 domain 不是
+  <data-extraction-rules> 的合法值(合法集:file/database/sharedpref/external/root
+  + device_ 四件套),lintVitalRelease 直接判 fatal;其语义等同于上面的 external,
+  移除不影响排除范围。
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="device_root" />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+        <exclude domain="device_file" path="." />
+        <exclude domain="device_database" path="." />
+        <exclude domain="device_sharedpref" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="device_root" />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+        <exclude domain="device_file" path="." />
+        <exclude domain="device_database" path="." />
+        <exclude domain="device_sharedpref" path="." />
+    </device-transfer>
+</data-extraction-rules>

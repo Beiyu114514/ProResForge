@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 默认语言:中文(契约 §8.3) -->
+<resources>
+
+    <string name="app_name">ProResForge 转码炉</string>
+    <string name="app_tagline">ProRes / MOV → MP4 / WebM,硬件编码优先</string>
+
+    <!-- 底部三 Tab(契约 §8.2 AppNav) -->
+    <string name="tab_transcode">转码</string>
+    <string name="tab_jobs">任务</string>
+    <string name="tab_history">历史</string>
+
+    <!-- HomeScreen:选择文件 -->
+    <string name="pick_files">选择文件</string>
+    <string name="pick_files_hint">从文件或 MotionCam 相册中选择视频,支持多选</string>
+    <string name="fallback_file_name">未命名文件</string>
+    <string name="file_probing">解析中</string>
+    <string name="file_unparseable">无法解析</string>
+    <string name="btn_remove_file">移除</string>
+    <string name="files_title">媒体文件</string>
+
+    <!-- HomeScreen:LUT -->
+    <string name="pick_lut">LUT 滤镜</string>
+    <string name="lut_pick_action">选择 LUT</string>
+    <string name="lut_none">不使用 LUT</string>
+    <string name="lut_intensity">LUT 强度</string>
+    <string name="lut_strength">%1$d%%</string>
+    <string name="lut_preview_before">原画面</string>
+    <string name="lut_preview_after">调色后</string>
+    <string name="btn_clear_lut">清除 LUT</string>
+
+    <!-- HomeScreen:输出参数 -->
+    <string name="format_title">输出格式</string>
+    <string name="tenbit_toggle">10bit 编码(色彩过渡更平滑)</string>
+    <string name="quality_title">画质</string>
+    <string name="quality_high">高</string>
+    <string name="quality_medium">中</string>
+    <string name="quality_low">低</string>
+    <string name="scale_title">分辨率</string>
+    <string name="fps_title">帧率</string>
+    <string name="audio_title">音频</string>
+    <string name="audio_copy">直接拷贝</string>
+    <string name="audio_aac">转为 AAC</string>
+    <string name="audio_drop">丢弃音轨</string>
+
+    <!-- 格式/缩放/帧率标签(model.kt 枚举 labelRes 引用,值本身不翻译容器名与数字) -->
+    <string name="fmt_h264">MP4 · H.264</string>
+    <string name="fmt_h265">MP4 · H.265</string>
+    <string name="fmt_vp9">WebM · VP9</string>
+    <string name="fmt_prores">MOV · ProRes</string>
+    <string name="scale_orig">原始</string>
+    <string name="scale_1080">1080p</string>
+    <string name="scale_720">720p</string>
+    <string name="scale_50">50%</string>
+    <string name="scale_25">25%</string>
+    <string name="fps_orig">原始</string>
+    <string name="fps_60">60</string>
+    <string name="fps_30">30</string>
+    <string name="fps_24">24</string>
+    <string name="fps_25">25</string>
+    <string name="fps_48">48</string>
+    <string name="fps_50">50</string>
+
+    <!-- DNG 序列 zip(MotionCam,契约 §10.6) -->
+    <string name="dng_quality_title">解raw 质量</string>
+    <string name="dng_color_title">白平衡</string>
+    <string name="dngq_fast">快速</string>
+    <string name="dngq_balanced">均衡</string>
+    <string name="dngq_fine">精细</string>
+    <string name="dngcolor_camera">相机 WB</string>
+    <string name="dngcolor_auto">自动 WB</string>
+    <string name="dngcolor_d65">固定日光</string>
+    <string name="dngmap_title">色彩映射</string>
+    <string name="dngmap_none">线性</string>
+    <string name="dngmap_applelog">Apple Log</string>
+    <string name="dng_zip_hint">DNG 序列 zip:%1$d 帧 · %2$d×%3$d。帧率请自选(默认 25)。
+        预计耗时约 %4$s(后台跑,可离开界面)。</string>
+    <string name="dng_zip_hint_res">大尺寸源(%1$d×%2$d):精细档极慢,建议 1080p + 均衡。</string>
+    <string name="dng_zip_hint_frames">%1$d 分钟</string>
+
+    <!-- HomeScreen:输出目录与操作 -->
+    <string name="output_dir_title">输出目录</string>
+    <string name="output_dir_default">Movies/ProResForge</string>
+    <string name="output_dir_unset">未选择输出目录</string>
+    <string name="output_dir_current">当前目录</string>
+    <string name="output_dir_pick">选择目录</string>
+    <string name="output_dir_change">更改目录</string>
+    <string name="btn_start">开始转码</string>
+    <string name="btn_cancel">取消</string>
+    <string name="btn_busy">处理中…</string>
+    <string name="start_hint_pick_files">请先选择要转码的文件</string>
+    <string name="start_hint_probing">正在读取文件信息,请稍候</string>
+    <string name="start_hint_unparseable">有文件无法读取,请移除后再试</string>
+    <string name="start_hint_output_dir">请选择输出目录后再开始</string>
+    <string name="notification_rationale_title">允许发送转码通知吗?</string>
+    <string name="notification_rationale_message">通知用于显示后台转码进度和完成状态。即使不允许,转码仍会继续。</string>
+    <string name="notification_allow">允许通知</string>
+    <string name="notification_skip">暂不允许</string>
+    <string name="advanced_settings">高级设置</string>
+    <string name="advanced_show">展开</string>
+    <string name="advanced_hide">收起</string>
+
+    <!-- 通用:进度/占位 -->
+    <string name="progress_indeterminate">…</string>
+
+    <!-- HomeScreen:媒体信息卡 -->
+    <string name="media_title">媒体信息</string>
+    <string name="media_empty">选择文件后显示源信息</string>
+    <string name="media_hdr_hint">检测到 HDR 源,建议先套 tonemap LUT 再转 SDR</string>
+    <string name="fact_codec">编码</string>
+    <string name="fact_resolution">分辨率</string>
+    <string name="fact_fps">帧率</string>
+    <string name="fact_duration">时长</string>
+    <string name="fact_pixfmt">像素格式</string>
+    <string name="fact_bitrate">码率</string>
+    <string name="fact_frames">帧数</string>
+    <string name="fact_audio">音频</string>
+    <string name="fact_audio_none">无音轨</string>
+    <string name="fact_color">色彩</string>
+    <string name="fact_file">文件</string>
+    <string name="fact_size">体积</string>
+    <string name="fact_lut">LUT</string>
+    <string name="fact_lut_grid">LUT 网格</string>
+    <string name="fact_lut_value">%1$s · %2$d%%</string>
+    <string name="fact_started_at">开始于</string>
+    <string name="fact_rotation">旋转 %1$d°</string>
+    <string name="preview_none">无预览</string>
+
+    <!-- 画质说明(qualityDescription:PRORES / VP9 / H.264-H.265) -->
+    <string name="quality_desc_prores">母版质量:ProRes 422 HQ(prores_ks),忽略质量档位</string>
+    <string name="quality_desc_vp9">VP9 CQ %1$d,%2$s</string>
+    <string name="quality_desc_crf">CRF %1$d,%2$s</string>
+    <string name="quality_lower_is_better">数值越小质量越高</string>
+
+    <!-- JobsScreen -->
+    <string name="jobs_empty">当前没有转码任务</string>
+    <string name="job_state_current">%1$s · 当前任务</string>
+    <string name="btn_clear_finished">清除已完成</string>
+    <string name="stage_queued">排队中</string>
+    <string name="stage_init">初始化</string>
+    <string name="stage_decode">转码中</string>
+    <string name="stage_audio">音频</string>
+    <string name="stage_finalize">收尾</string>
+    <string name="stage_done">完成</string>
+    <string name="stage_error">出错</string>
+
+    <!-- 任务状态(契约 §8.2 JobState) -->
+    <string name="job_state_queued">排队中</string>
+    <string name="job_state_running">转码中</string>
+    <string name="job_state_done">已完成</string>
+    <string name="job_state_failed">失败</string>
+    <string name="job_state_cancelled">已取消</string>
+
+    <!-- 错误与通知(契约 §2 返回码:1 取消 / 2 输出不支持 / 3 输入损坏 / <0 ffmpeg 错误码取反) -->
+    <string name="err_unsupported">输出格式或编码器不支持</string>
+    <string name="err_invalid_input">输入文件损坏或无法解码</string>
+    <string name="err_ffmpeg">FFmpeg 错误码 %1$d</string>
+    <string name="err_probe">无法读取输入</string>
+    <string name="err_fd">无法打开输入或输出文件</string>
+    <string name="err_native_call">FFmpeg 调用失败</string>
+    <string name="err_spec">%1$s 参数无效,无法开始转码</string>
+    <string name="err_enqueue_failed">任务创建失败,请重试</string>
+    <string name="notif_channel_name">转码任务</string>
+    <string name="notif_channel_desc">显示转码进度与完成情况</string>
+    <string name="notif_channel_done_name">转码结果</string>
+    <string name="notif_running">正在转码 %1$d%%</string>
+    <string name="notif_done">转码完成:%1$s</string>
+    <string name="notif_failed">转码失败:%1$s</string>
+
+    <!-- HistoryScreen 单项操作 -->
+    <string name="share">分享</string>
+    <string name="open">打开</string>
+    <string name="btn_logs">日志</string>
+    <string name="toast_no_logs">暂无日志</string>
+    <string name="btn_clear_history">清空历史</string>
+    <string name="history_title">历史记录</string>
+    <string name="history_empty">暂无历史记录</string>
+    <string name="history_clear_title">清空历史记录?</string>
+    <string name="history_clear_message">这会删除所有历史记录,但不会删除已导出的文件。</string>
+    <string name="history_clear_cancel">取消</string>
+    <string name="history_clear_confirm">清空</string>
+    <string name="toast_bad_out_uri">输出地址无效</string>
+    <string name="toast_no_app_to_open">没有能打开此文件的应用</string>
+    <string name="toast_share_failed">分享失败</string>
+
+    <!-- HomeViewModel 一次性提示(Snackbar) -->
+    <string name="msg_files_picked">已选择 %1$d 个文件</string>
+    <string name="msg_lut_loaded">已加载 LUT:%1$s</string>
+    <string name="msg_lut_invalid">LUT 文件解析失败</string>
+    <string name="msg_output_dir_updated">输出目录已更新</string>
+    <string name="msg_out_create_failed">无法创建输出文件:%1$s</string>
+    <string name="msg_queued">已加入转码队列:%1$d 个任务</string>
+    <string name="btn_view_jobs">查看任务</string>
+    <string name="err_no_output_dir">请先选择输出目录</string>
+    <string name="err_unprobeable">有文件无法读取,请点「移除」剔除后再试,或换其它文件</string>
+
+    <!-- HistoryScreen:开源许可(S-2,文本在 assets/licenses/) -->
+    <string name="btn_licenses">开源许可</string>
+    <string name="licenses_title">开源许可与致谢</string>
+    <string name="licenses_close">关闭</string>
+    <string name="licenses_load_failed">许可文件读取失败</string>
+
+</resources>
