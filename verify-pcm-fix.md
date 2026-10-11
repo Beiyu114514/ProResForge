@@ -62,9 +62,14 @@ I/TranscodeService: job end: ... state=DONE ...
 ### 4. 回归测试
 
 确认以下场景不受影响：
-- [ ] DNG zip → ProRes（音频应仍为 PCM）
-- [ ] ProRes(AAC) → MP4（应保持 copy 模式）
-- [ ] ProRes(PCM) → MOV（应保持 copy 模式）
+- [x] DNG zip → ProRes（音频应仍为 PCM）—— 2026-10-11 release 包复证：输出 prores(apch)+pcm_s24le(in24)，见 docs/RELEASE-RECORD-2026-10-11.md §3
+- [x] ProRes(AAC) → MP4（应保持 copy 模式）—— 2026-10-11 release 包复证：无降级日志，输出 aac
+- [x] ProRes(PCM) → MOV（应保持 copy 模式）—— 2026-10-11 release 包复证：zip-pcm24 → MOV 输出音轨 pcm_s24le
+
+> 2026-10-11 整改说明：①三条回归已在 **release 包**（dist/ProResForge-1.0.0.apk，
+> SHA-256 9a81293d…）上复证；②N11-1（PCM 上界漏 F24LE/VIDC/SGA）已修
+> （transcode.cpp 上界改 `aid < AV_CODEC_ID_ADPCM_IMA_QT`）；③N11-2 Snackbar 常驻
+> 已修（M3 带 actionLabel 默认 Indefinite，显式 Long 后 10s 自动消失）。
 
 ---
 
