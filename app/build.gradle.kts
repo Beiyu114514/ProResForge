@@ -6,6 +6,7 @@ import java.security.MessageDigest
 import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -424,13 +425,49 @@ android {
         unitTests.isReturnDefaultValues = true
     }
 
+    // C2(2026-10-11):release 签名凭据只从根目录 keystore.properties(gitignored)
+    // 读取;文件不存在时本 config 保持空字段,release 块也不挂 signingConfig ——
+    // 出的是未签名 APK(见 docs/RELEASE-2026-10-11.md 的签名配置说明)。
+    // 严禁把口令写进本文件或任何入库文件。
+    signingConfigs {
+        create("release") {
+            val p = Properties().apply {
+                val f = rootProject.file("keystore.properties")
+                if (f.exists()) f.inputStream().use { load(it) }
+            }
+            val sf = p.getProperty("storeFile")
+            if (sf != null) {
+                storeFile = rootProject.file(sf)
+                storePassword = p.getProperty("storePassword")
+                keyAlias = p.getProperty("keyAlias")
+                keyPassword = p.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            // C3(minify 决策,2026-10-11):维持 isMinifyEnabled=false。
+            // 理由:①本地工具类应用,混淆收益低(无商业逻辑可藏,体积 +~2MB 可接受);
+            // ②开 R8 必须先补 JNI keep 规则(FFmpeg native 方法、JNI 反射触碰类、
+            //   JobSpec/JobRecord 序列化字段,现有 proguard-rules.pro 仅 9 行不够),
+            //   并重跑全套设备冒烟(Round10 既定结论:没有冒烟不开 R8);
+            //   1.0.0 首发不做这笔风险投入,以后开 R8 走独立变更+全套 D 段回归。
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // C2(签名):凭据从根目录 keystore.properties(gitignored)读,
+            // 不入库、不硬编码;文件缺失时保持无 signingConfig(可出未签名包,
+            // 供 CI/存档场景),本机出正式包前先按 docs/RELEASE-2026-10-11.md 配好。
+            val ksProps = Properties().apply {
+                val f = rootProject.file("keystore.properties")
+                if (f.exists()) f.inputStream().use { load(it) }
+            }
+            if (ksProps.getProperty("storeFile") != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             // P0-2(Release native 基线):上面的 externalNativeBuild.cmake 主块对
             // debug/release 共用。externalNativeBuild 声明在 VariantDimension 上,
             // 因此在 release buildType 内单独给 CMake configure 追加
@@ -492,6 +529,6 @@ dependencies {
     testImplementation(libs.junit)
 }
 
-// 说明:如需 release 签名,在 android { buildTypes { release { ... } } } 中自行加
-// signingConfigs { create("release") { ... } } 并在 release 上 signingConfig = ...;
-// 仓库不包含任何 keystore / 签名凭据,签名文件一律由本机保管并保持 ignored。
+// 说明(2026-10-11 更新):release 签名已接入 —— signingConfigs["release"] 从根目录
+// keystore.properties(gitignored)读凭据;本机需按 docs/RELEASE-2026-10-11.md 配置。
+// 仓库不含任何 keystore / 签名凭据,签名文件一律由本机库外保管并保持 ignored。
