@@ -1,0 +1,21 @@
+BUILDINFO —— 由 scripts/build-ffmpeg-android.sh 自动生成,勿手改
+生成时间:      2026-10-11T00:07:23Z
+构建机:        Linux 6.6.87.2-microsoft-standard-WSL2 x86_64
+脚本:          scripts/build-ffmpeg-android.sh
+脚本 sha256:   683d34540d3847231c73547fde51bf8be36e112379c00c648b17abdc02e2bb4b
+NDK:           /home/ubuntu/android-ndk-r27
+NDK revision:  27.0.12077973
+API level:     24
+源码 pin(实际 HEAD):
+  FFmpeg        tag n6.1.6 @ f1e3a2bf7a2f2cde936d1ed97f09a26853d20125
+  x264          stable @ b35605ace3ddf7c1a5d67a2eb553f034aef41d55
+  x265          tag 4.2 @ e444744c03978c1fb4e037168967020cf2648427
+  libvpx        tag v1.17.0 @ 6df3ec34557879fff673706f4a1d9fbd0f3a6f0e
+  LibRaw        tag 0.21.4 @ 9646d776c7c61976080a8f2be67928df0750493e
+  LibRaw-cmake  SHA eb98e4325aef2ce85d2eb031c2ff18640ca616d3 @ eb98e4325aef2ce85d2eb031c2ff18640ca616d3
+产物实际版本头(自 include/ 读出,非 pin 期望值):
+  arm64-v8a: libavcodec 60.31.102 | X264_BUILD 165 | X265_BUILD 216
+  armeabi-v7a: libavcodec 60.31.102 | X264_BUILD 165 | X265_BUILD 216
+LibRaw provenance manifest(段A,机器可读判据在 /home/ubuntu/prf-ffmpeg-rebuild/app/src/main/cpp/prebuilt/<abi>/libraw-manifest-<abi>):
+  arm64-v8a: abi=arm64-v8a tag=0.21.4 ndk=27.0.12077973 tls_probe=absent libraw_a_sha256=793456be458d3f67c59a99c4e15e069dc04b4de51a1e1f3e785dff133839b76d
+  armeabi-v7a: abi=armeabi-v7a tag=0.21.4 ndk=27.0.12077973 tls_probe=absent libraw_a_sha256=de71af68709c59bc916a5b72f9e4ebdac4fc4f7da74f49cd247496bd9c4cc2a6

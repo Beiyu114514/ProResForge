@@ -1,0 +1,18 @@
+# /home/ubuntu/prf-ffmpeg-rebuild/app/src/main/cpp/prebuilt/arm64-v8a/libraw-manifest-arm64-v8a —— 由 scripts/build-ffmpeg-android.sh 自动生成,勿手改
+# 字段含义 / 生成方式 / 门禁行为见 app/src/main/cpp/prebuilt/README.md。
+abi=arm64-v8a
+api_level=24
+ndk_revision=27.0.12077973
+libraw_tag=0.21.4
+libraw_cmake_sha=eb98e4325aef2ce85d2eb031c2ff18640ca616d3
+raw_r_target=raw_r
+libraw_nothreads=absent
+raw_r_cmake_flags=ANDROID_ABI=arm64-v8a;ANDROID_PLATFORM=android-24;ANDROID_STL=c++_static;CMAKE_BUILD_TYPE=Release;CMAKE_POSITION_INDEPENDENT_CODE=ON;BUILD_SHARED_LIBS=OFF;CMAKE_DISABLE_FIND_PACKAGE_JPEG=ON;CMAKE_DISABLE_FIND_PACKAGE_Jasper=ON;CMAKE_DISABLE_FIND_PACKAGE_OpenMP=ON;ENABLE_EXAMPLES=OFF;ENABLE_OPENMP=OFF;ENABLE_LCMS=OFF;ENABLE_RAWSPEED=OFF;ENABLE_JASPER=OFF;ENABLE_X3FTOOLS=OFF;ENABLE_6BY9RPI=OFF;LIBRAW_PATH=/home/ubuntu/.prf-ffmpeg-build/libraw;target=raw_r
+threads_lib=pthread
+script_sha256=683d34540d3847231c73547fde51bf8be36e112379c00c648b17abdc02e2bb4b
+libraw_sha256=793456be458d3f67c59a99c4e15e069dc04b4de51a1e1f3e785dff133839b76d
+symbols_sha256=6c937e24ef1dc756ce7e12980fd7d8459a85c17ad83ec93e8bc4a5e6e848dbf4
+members_sha256=aa1eb59d63bd4cf33a8fa96731b96ecb5ef739bd5b693a5b17084cdf39c71a43
+tls_probe=absent
+build_time_utc=2026-10-11T00:04:13Z
+manual=false

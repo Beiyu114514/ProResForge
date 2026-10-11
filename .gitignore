@@ -1,7 +1,18 @@
 # ProResForge .gitignore
 
-# FFmpeg 预编译产物(每个 ABI 约 30~60MB,由 scripts/build-ffmpeg-android.sh 生成)
-app/src/main/cpp/prebuilt/
+# FFmpeg 预编译产物(每个 ABI 约 30~60MB,由 scripts/build-ffmpeg-android.sh 生成)。
+# 二进制(.so/.a/头文件)不入库;但 provenance 记录必须可跟踪——上线清单 B3/B4 要求
+# 发布 tag 归档携带 BUILDINFO、prebuilt/README.md 与 <abi>/libraw-manifest-<abi>
+# (GPL 对应源码 offer 的「pin 记录」即此三者 + scripts/build-ffmpeg-android.sh)。
+app/src/main/cpp/prebuilt/*
+!app/src/main/cpp/prebuilt/BUILDINFO
+!app/src/main/cpp/prebuilt/README.md
+!app/src/main/cpp/prebuilt/*/
+app/src/main/cpp/prebuilt/*/*
+!app/src/main/cpp/prebuilt/*/libraw-manifest-*
+
+# .zcode 会话数据
+.zcode/
 
 # 构建产物:APK / AAB / 临时分发目录(体积大且不可复现,切勿提交)
 *.apk
