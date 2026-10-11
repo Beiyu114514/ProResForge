@@ -11,9 +11,16 @@ import com.proresforge.app.data.ScaleMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 /**
  * JobBus 状态机回归(第 9 轮审查 §7 测试缺口②;K-01/K-02 都在这一带)。
@@ -266,5 +273,70 @@ class JobBusTest {
         assertTrue(JobState.DONE.isTerminalState())
         assertTrue(JobState.FAILED.isTerminalState())
         assertTrue(JobState.CANCELLED.isTerminalState())
+    }
+
+    // ---------------------------------------------------- P2-04 并发场景
+
+    @Test
+    fun `并发取消与 finish 不应导致状态不一致`() = runBlocking {
+        // 准备:入队并开始一个任务
+        val id = enqueueOne("conc")
+        assertTrue(JobBus.begin(id))
+
+        // 并发场景:一个协程反复取消,另一个协程反复 finish
+        val job1 = launch(Dispatchers.Default) {
+            repeat(100) {
+                JobBus.cancel(id)
+                delay(1)
+            }
+        }
+
+        val job2 = launch(Dispatchers.Default) {
+            repeat(100) {
+                JobBus.finish(id, JobState.DONE, null, 1000L, 100L, 500L)
+                delay(1)
+            }
+        }
+
+        job1.join()
+        job2.join()
+
+        // 断言:最终状态应是终态(CANCELLED 或 DONE),不应是中间态。
+        // 终态守卫:cancel 在前 → CANCELLED;finish 在前 → DONE;
+        // 两者都是合法结果,不断言具体值。
+        val finalRec = JobBus.jobs.value[id]
+        assertNotNull(finalRec)
+        assertTrue("最终状态应是终态", finalRec!!.state.isTerminalState())
+    }
+
+    @Test
+    fun `并发 begin 同一任务应只有一个成功`() = runBlocking {
+        // 10 个协程同时 begin 仍处于 QUEUED 的任务:状态机锁保证只有一个
+        // QUEUED→RUNNING 转换成功(串行队列不变量,P2-04)。
+        val id = enqueueOne("race")
+        val results = (1..10).map {
+            async(Dispatchers.Default) {
+                JobBus.begin(id)
+            }
+        }.awaitAll()
+
+        val successCount = results.count { it }
+        assertEquals("只有一个 begin 应成功", 1, successCount)
+        assertEquals(JobState.RUNNING, record(id).state)
+    }
+
+    @Test
+    fun `并发 begin 已运行任务应全部拒绝`() = runBlocking {
+        // 已是 RUNNING:并发重试 begin 也必须全部拒绝(串行队列不变量)。
+        val id = enqueueOne("race2")
+        assertTrue(JobBus.begin(id))
+        val results = (1..10).map {
+            async(Dispatchers.Default) {
+                JobBus.begin(id)
+            }
+        }.awaitAll()
+
+        val successCount = results.count { it }
+        assertEquals("运行中的任务不允许再次 begin", 0, successCount)
     }
 }

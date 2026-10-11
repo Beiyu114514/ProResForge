@@ -319,6 +319,11 @@ int avframe_pool_count(int depth, int w, int h)
 // _FILE_OFFSET_BITS=64 不能全文件定义:它会经 FFmpeg 头改变
 // ff_AMediaCodec_queueInputBuffer 的 off_t 形参 ABI,并与 libraw.a(以 NDK 默认
 // 32 位 off_t 编译)不一致。
+// 大文件偏移策略(P2-01,2026-10-11):
+//   - 内部(FdIoCtx.pos/size、AVIO 回调形参)统一用 int64_t(与 AVIO 回调一致);
+//   - pread64/pwrite64/lseek64 参数处显式转成 off64_t(POSIX 形参要求);
+//   - Android LP64: off64_t ≡ int64_t ≡ long(无损);
+//   - Android LP32: off64_t ≡ int64_t ≡ long long(无损,host harness 已验证 >4GB)。
 // ---------------------------------------------------------------------------
 int fd_io_read(void *opaque, uint8_t *buf, int buf_size)
 {

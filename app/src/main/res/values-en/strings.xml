@@ -149,6 +149,11 @@
     <string name="err_probe">Cannot read input</string>
     <string name="err_fd">Cannot open input or output file</string>
     <string name="err_native_call">FFmpeg call failed</string>
+    <!-- P2-02: nativeRun exception triage (missing native lib / OOM / security, rest fall to err_unknown) -->
+    <string name="err_native_library">Native library failed to load, please reinstall the app</string>
+    <string name="err_out_of_memory">Not enough memory, close other apps and try again</string>
+    <string name="err_security">Insufficient permissions to access the file</string>
+    <string name="err_unknown">Unknown error: %1$s</string>
     <string name="err_spec">Invalid %1$s parameters, cannot start transcoding</string>
     <string name="err_enqueue_failed">Could not create the job, please try again</string>
     <string name="notif_channel_name">Transcode jobs</string>

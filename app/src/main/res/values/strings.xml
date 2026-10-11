@@ -158,6 +158,11 @@
     <string name="err_probe">无法读取输入</string>
     <string name="err_fd">无法打开输入或输出文件</string>
     <string name="err_native_call">FFmpeg 调用失败</string>
+    <!-- P2-02:nativeRun 异常分流(native 库缺失/内存不足/权限,其余落 err_unknown) -->
+    <string name="err_native_library">Native 库未加载,请重新安装应用</string>
+    <string name="err_out_of_memory">内存不足,请关闭其他应用后重试</string>
+    <string name="err_security">权限不足,无法访问文件</string>
+    <string name="err_unknown">未知错误: %1$s</string>
     <string name="err_spec">%1$s 参数无效,无法开始转码</string>
     <string name="err_enqueue_failed">任务创建失败,请重试</string>
     <string name="notif_channel_name">转码任务</string>

@@ -357,16 +357,57 @@ class TranscodeService : Service() {
 
             // 4) 跑。activeRun 的完成闸门必须在 nativeRun 返回/抛异常后才打开；
             // onDestroy 依此等待 native 停止写输出，再删除半成品，避免并发写删。
+            // P2-02:异常按类型分流成可读文案(库缺失 ≠ 内存不足 ≠ 权限),
+            // 兜底 Throwable 才落到「未知错误」;各分支收尾同构 —— native 从没
+            // 拿到 fd,所有权还在我们手上,收回成对的两个 fd(否则每次失败
+            // 泄漏 2 个 fd)、清 pending 取消、删掉 0 字节输出文档,再早退
+            // (与上面 buildSpec 失败路径同构;runQueue 会对早退结果补 finish)。
             val rc: Int? = try {
                 FFmpeg.nativeRun(inPair.first, inPair.second, outFd, specStr, makeProgress(id, spec))
-            } catch (t: Throwable) {
-                AppLog.e(TAG, "nativeRun 异常(库缺失/符号不匹配?)", t)
-                // native 从没拿到 fd,所有权还在我们手上:收回成对的两个 fd,
-                // 否则每次失败泄漏 2 个 fd(见上面 195-204 的 mirror 注释)。
+            } catch (e: UnsatisfiedLinkError) {
+                // .so 缺失或 JNI 符号不匹配(装包不完整/ABI 没编进去)
+                AppLog.e(TAG, "Native 库未加载: ${e.message}", e)
                 runCatching { closeDetachedFd(inPair.first) }
                 runCatching { closeDetachedFd(outFd) }
                 clearPendingCancel()
-                null
+                deleteOutputDocument(spec.outputUri)
+                return JobOutcome(
+                    JobState.FAILED, getString(R.string.err_native_library),
+                    0L, elapsed(startedAt), inSize
+                )
+            } catch (e: OutOfMemoryError) {
+                // 大文件/高分辨率下 JVM 或 native 分配失败
+                AppLog.e(TAG, "内存不足: ${e.message}", e)
+                runCatching { closeDetachedFd(inPair.first) }
+                runCatching { closeDetachedFd(outFd) }
+                clearPendingCancel()
+                deleteOutputDocument(spec.outputUri)
+                return JobOutcome(
+                    JobState.FAILED, getString(R.string.err_out_of_memory),
+                    0L, elapsed(startedAt), inSize
+                )
+            } catch (e: SecurityException) {
+                // SAF/SELinux 拒绝(fd 已开出,但 native 侧访问被拒等)
+                AppLog.e(TAG, "权限不足: ${e.message}", e)
+                runCatching { closeDetachedFd(inPair.first) }
+                runCatching { closeDetachedFd(outFd) }
+                clearPendingCancel()
+                deleteOutputDocument(spec.outputUri)
+                return JobOutcome(
+                    JobState.FAILED, getString(R.string.err_security),
+                    0L, elapsed(startedAt), inSize
+                )
+            } catch (t: Throwable) {
+                // 兜底:其它未预期异常,带上类型名便于排查
+                AppLog.e(TAG, "nativeRun 未知异常: ${t.javaClass.simpleName} - ${t.message}", t)
+                runCatching { closeDetachedFd(inPair.first) }
+                runCatching { closeDetachedFd(outFd) }
+                clearPendingCancel()
+                deleteOutputDocument(spec.outputUri)
+                return JobOutcome(
+                    JobState.FAILED, getString(R.string.err_unknown, t.javaClass.simpleName),
+                    0L, elapsed(startedAt), inSize
+                )
             }
             AppLog.i(TAG, "nativeRun rc=$rc")
             // M-新A:nativeRun 返回后 end_transcode 已清掉 active 边界;若用户恰在

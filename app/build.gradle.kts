@@ -453,6 +453,10 @@ android {
             //   JobSpec/JobRecord 序列化字段,现有 proguard-rules.pro 仅 9 行不够),
             //   并重跑全套设备冒烟(Round10 既定结论:没有冒烟不开 R8);
             //   1.0.0 首发不做这笔风险投入,以后开 R8 走独立变更+全套 D 段回归。
+            // P1-01(2026-10-11):keep 规则已补全(proguard-rules.pro);临时开启 R8
+            // 构建+模拟器冒烟六场景通过(探测/转码 rc=0、取消 rc=1 删半成品、历史
+            // 序列化/清空/重启持久化,无 ClassNotFound/UnsatisfiedLinkError)。按验证
+            // 步骤回退 false,是否开启留给将来的独立变更(见 docs/RELEASE-SIGNING.md)。
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
