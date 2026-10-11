@@ -41,10 +41,24 @@ ProResForge 转码炉(包名 `com.proresforge.app`)以 **MIT 许可证**发布,�
 ### GPL-3.0 §6 书面源码 offer
 
 本应用按 **GNU General Public License v3(含 --enable-version3)** 分发,包含
-FFmpeg、x264、x265 的二进制。据此,你可以在遵守 GPLv3 的前提下,随本 APK 一并
-获得**对应完整源码**(Corresponding Source,含构建脚本与 pin 记录):见随本应用
-发布渠道提供的源码包/仓库链接;若未随附,可向分发者书面索取,分发者收取不超过
-物理传输成本的费用提供之。
+FFmpeg、x264、x265 的二进制。据此,你可以在遵守 GPLv3 的前提下获得**对应完整
+源码**(Corresponding Source,含全部构建脚本、版本 pin 表与 provenance 记录),
+方式为以下之一:
+
+1. **随包获取(首选)**:对应源码打包为 `ProResForge-source-v1.0.0.zip`,
+   与本 APK 在**同一发布条目**中一并分发(即:你下载本 APK 的页面/渠道同时
+   提供该源码包,二者一一对应,均由 tag `v1.0.0` 产出);
+2. **书面索取**:上述发布条目未附带源码包时,可自本 NOTICE 随附的发布页面
+   载明的联系方式向分发者书面索取,分发者收取不超过物理传输成本的费用提供之。
+
+**要约人**:ProResForge contributors。
+**有效期**:本 offer 自 2026-10-11 起**至少三年内**对上述任一分发副本持续有效
+(GPL-3.0 §6(b):随每个副本附带的 offer 对其所有接收者有效,为期三年)。
+
+源码包内容自检:解开后应含 `scripts/build-ffmpeg-android.sh`(可复现整套
+FFmpeg/x264/x265/libvpx/LibRaw 交叉编译)、`app/src/main/cpp/prebuilt/BUILDINFO`
+与 `app/src/main/cpp/prebuilt/<abi>/libraw-manifest-<abi>`(pin 与 provenance
+记录)。版本对应关系见上节「源码获取方式」。
 
 ## 3. dcraw 归属
 

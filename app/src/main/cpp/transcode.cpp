@@ -351,6 +351,8 @@ int fd_io_write(void *opaque, uint8_t *buf, int buf_size)
             if (errno == EINTR) continue;
             return AVERROR(errno);
         }
+        // A4:pwrite64 返回 0 表示毫无进展,继续循环只会原地打转(阻塞整条管线),break。
+        if (n == 0) break;
         total += n;
     }
     c->pos += total;
@@ -2220,8 +2222,11 @@ int run_transcode(const TranscodeParams &params)
             }
 
             // PCM 族不能 copy 进 MP4(sowt/in24/in32 等是 MOV tag,MP4 只认压缩音频)
+            // N11-1:上界原来是 PCM_F16LE,漏掉同块的 F24LE/VIDC/SGA(0x10803–0x10805);
+            // PCM 块占满 0x10000–0x10FFF,ADPCM_IMA_QT(0x11000)起是下一个块,用 <
+            // 覆盖整个 PCM 块。
             if (audio_mode == "copy") {
-                bool is_pcm = (aid >= AV_CODEC_ID_FIRST_AUDIO && aid <= AV_CODEC_ID_PCM_F16LE);
+                bool is_pcm = (aid >= AV_CODEC_ID_FIRST_AUDIO && aid < AV_CODEC_ID_ADPCM_IMA_QT);
                 bool is_mp4 = (std::strcmp(oc->oformat->name, "mp4") == 0 || 
                               std::strcmp(oc->oformat->name, "ipod") == 0 ||
                               std::strcmp(oc->oformat->name, "m4v") == 0);

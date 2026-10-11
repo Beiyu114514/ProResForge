@@ -33,7 +33,6 @@ object Notifications {
     private const val TAG = "Notifications"
 
     /** 建渠道(幂等);API < 26 无需渠道,直接返回。 */
-    /** 建渠道(幂等);API < 26 无需渠道,直接返回。 */
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = context.getSystemService(NotificationManager::class.java) ?: return

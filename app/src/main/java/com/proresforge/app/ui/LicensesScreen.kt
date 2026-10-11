@@ -47,7 +47,14 @@ private sealed interface LicenseRow {
     data class Line(val text: String) : LicenseRow
 }
 
-/** 文档 → 扁平行;跳过空行与分隔线,并去掉 Markdown 记号(标题 # 号、列表符号、引用 > 号、表格竖线) */
+/** 文档 → 扁平行;跳过空行与分隔线,并去掉 Markdown 记号(标题 # 号、列表符号、引用 > 号、表格竖线,
+ *  以及行内记号:**粗体**、`代码`、[文字](链接) —— U-17 遗留:行内记号在纯文本渲染里只剩噪音)。 */
+private fun stripInlineMarkdown(s: String): String = s
+    .replace(Regex("\\[([^\\]]+)]\\(([^)]+)\\)")) { m -> "${m.groupValues[1]} (${m.groupValues[2]})" }
+    .replace("**", "")
+    .replace("__", "")
+    .replace("`", "")
+
 private fun List<LicenseDoc>.toRows(): List<LicenseRow> = flatMap { doc ->
     buildList {
         add(LicenseRow.Title(doc.title))
@@ -59,10 +66,10 @@ private fun List<LicenseDoc>.toRows(): List<LicenseRow> = flatMap { doc ->
                 text.all { ch -> ch == '-' || ch == '*' || ch == '_' } -> Unit
                 text.startsWith("|") || text.endsWith("|") ->
                     if (text.trim('|', '-', ':', ' ').isEmpty()) Unit
-                    else add(LicenseRow.Line(text.trim('|').split('|').joinToString("   ") { cell -> cell.trim() }))
-                text.startsWith("#") -> add(LicenseRow.Title(text.trimStart('#').trim()))
-                text.startsWith(">") -> add(LicenseRow.Line(text.trimStart('>').trim()))
-                else -> add(LicenseRow.Line(line.removePrefix("- ").removePrefix("* ").removePrefix("+ ")))
+                    else add(LicenseRow.Line(stripInlineMarkdown(text.trim('|').split('|').joinToString("   ") { cell -> cell.trim() })))
+                text.startsWith("#") -> add(LicenseRow.Title(stripInlineMarkdown(text.trimStart('#').trim())))
+                text.startsWith(">") -> add(LicenseRow.Line(stripInlineMarkdown(text.trimStart('>').trim())))
+                else -> add(LicenseRow.Line(stripInlineMarkdown(line.removePrefix("- ").removePrefix("* ").removePrefix("+ "))))
             }
         }
     }

@@ -31,6 +31,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -137,18 +138,22 @@ fun HomeScreen(modifier: Modifier = Modifier, onOpenJobs: () -> Unit = {}) {
     }
 
     // 用 messageSeq 做 key:同文案的第二次提示(如 4 秒内连点两次开始)也能再弹一次。
-    // 用 messageSeq 做 key:同文案的第二次提示(如 4 秒内连点两次开始)也能再弹一次。
     val viewJobsLabel = stringResource(R.string.btn_view_jobs)
     LaunchedEffect(state.messageSeq) {
         val msg = state.message ?: return@LaunchedEffect
-        // U-11:入队成功的提示带一个动作,一键跳到任务页(否则用户不知道去哪儿看进度)。
-        val result = if (state.queuedHint) {
-            snackbarHostState.showSnackbar(msg, actionLabel = viewJobsLabel)
+        val queued = state.queuedHint
+        // N11-2:showSnackbar 会挂起到 Snackbar 消失为止;若等它返回后才 consumeMessage,
+        // 中途离开本页(切 Jobs)取消协程,message 永远不会被消费,回来时 LaunchedEffect
+        // 重启又弹同一条,反复横跳看起来就是「永不消失」。先消费再送出:key(messageSeq)
+        // 不变,本协程不会被打断,Snackbar 展示不受影响。
+        // duration 显式 Long:入队提示带动作,Short(4s)对可点击提示太短,Long(10s)内必自动消失。
+        vm.consumeMessage()
+        val result = if (queued) {
+            snackbarHostState.showSnackbar(msg, actionLabel = viewJobsLabel, duration = SnackbarDuration.Long)
         } else {
-            snackbarHostState.showSnackbar(msg)
+            snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Long)
         }
         if (result == SnackbarResult.ActionPerformed) onOpenJobs()
-        vm.consumeMessage()
     }
 
     // ---------- LUT 前后对比预览(第一个文件 40% 处;LUT/强度变化重取) ----------
