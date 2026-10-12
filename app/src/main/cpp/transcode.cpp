@@ -362,7 +362,9 @@ int fd_io_write(void *opaque, uint8_t *buf, int buf_size)
     }
     c->pos += total;
     if (c->pos > c->size) c->size = c->pos;
-    return (int)total;
+    // A4 后续(Round11「pwrite64==0 空转」项):total==0 说明一个字节都没写出去,
+    // 返回 0 会被 avio 当成功,静默产出截断文件;升格为 EIO 让 muxer 走错误路径。
+    return total == 0 ? AVERROR(EIO) : (int)total;
 }
 
 int64_t fd_io_seek(void *opaque, int64_t offset, int whence)

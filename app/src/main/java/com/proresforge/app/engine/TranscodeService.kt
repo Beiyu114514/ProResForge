@@ -730,6 +730,15 @@ class TranscodeService : Service() {
 
         private fun terminalNotifId(jobId: String): Int =
             terminalNotifIds.computeIfAbsent(jobId) { NOTIF_ID + 1 + terminalNotifSeq.incrementAndGet() }
+                .also {
+                    // 慢泄漏兜底(第 11 轮审查 §11):map 每任务一条 ~100B、永不清理;
+                    // computeIfAbsent 先天免疫「clear 与 put 竞争漏计数」(compute 原子段里
+                    // clear 只可能发生在 incrementAndGet 之前,不存在「put 回刚被 clear
+                    // 抹掉的旧映射」)。达阈值整体 clear:旧 id 若仍在通知栏,后续 DONE/
+                    // FAILED 重发会带新 id 不覆盖;**seq 不重置**——重置会用相同 id 覆盖
+                    // 通知栏旧通知(这正是放弃哈希 id 方案要避免的问题)。
+                    if (terminalNotifIds.size >= 4096) terminalNotifIds.clear()
+                }
 
         private const val REQ_CANCEL_CURRENT = 2001
 

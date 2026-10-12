@@ -502,7 +502,7 @@ int DngZip::open(int fd, int64_t len, std::string &err) {
         }
         if (!have_usize || !have_csize || !have_lho) {
             av_log(nullptr, AV_LOG_ERROR,
-                   "dngzip: ZIP64 extra 缺少必要字段(pos=%llu)\\n",
+                   "dngzip: ZIP64 extra 缺少必要字段(pos=%llu)\n",
                    (unsigned long long)pos);
             err = "zip: ZIP64 extra 缺少必要字段";
             return -1;
