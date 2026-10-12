@@ -45,5 +45,30 @@ keystore.properties
 .DS_Store
 Thumbs.db
 
+# 内部开发过程、审计、验收及计划文档(公开仓库不入库)
+CODE_REVIEW_*.md
+IMPLEMENTATION_*.md
+VERIFICATION-*.md
+verify-*.md
+FIXLOG-*.md
+AUDIT-*.md
+REVIEW-*.md
+docs/*-PLAN*.md
+docs/*-NOTES*.md
+docs/*-RECORD*.md
+docs/*-CHECKLIST*.md
+docs/*-SIGNING*.md
+docs/REVIEW*.md
+docs/AUDIT*.md
+docs/FIXLOG*.md
+docs/FIX-*.md
+docs/PERF-*.md
+docs/PROGRESS-*.md
+docs/RELEASE-*.md
+docs/UI-*.md
+docs/APPLELOG-*.md
+docs/DNGZIP-*.md
+docs/FFMPEG-*.md
+
 # 本地工具忽略列表(与 .gitignore 双份维护,两者同步更新)
 .zcodeignore

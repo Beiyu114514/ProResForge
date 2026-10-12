@@ -29,7 +29,7 @@
 
 - 要求 Android 7.0+(API 24);arm64 为主目标,32 位设备未经广泛测试
 - 下载后核对 SHA-256(发布页附),手机上直接安装(需允许「未知来源」)
-- 当前渠道只发 GitHub Releases,不上架 Google Play(决策记录:`docs/RELEASE-2026-10-11.md` §C6)。
+- 当前渠道只发 GitHub Releases,不上架 Google Play。
   二进制分发同样走 Releases 而非 GitHub Packages(registry 形态不适配 APK 直发,
   没有为纯二进制引入 Maven/容器包装的必要)
 
@@ -75,7 +75,6 @@
 ```
 
 跨模块唯一契约:`docs/INTERFACES.md`(JNI 签名、spec 键名、数据类、Manifest 权限)。
-代码审查记录与已修复问题清单见 `docs/REVIEW.md`。
 
 ## 3. 构建(约 3 步)
 
@@ -144,14 +143,8 @@ ProResForge/
 ├─ build.gradle.kts · settings.gradle.kts · gradle.properties
 ├─ gradle/                        # wrapper(版本随 AGP 升级同步)
 ├─ docs/
-│  ├─ INTERFACES.md               # 唯一接口契约(JNI/spec/数据类)
-│  ├─ REVIEW.md                   # 早期全量审查报告
-│  ├─ REVIEW-REPORT-2026-10-06.md # 2026-10-06 审查报告(交叉验证基线)
-│  ├─ FIXLOG-2026-10-06.md      # 该次报告的整改落地记录(修了哪些/验了哪些)
-│  ├─ AUDIT-2026-10-05.md · AUDIT-2026-10-06.md   # 自动审计与人工复核记录
-│  ├─ DNGZIP-PROGRES-PLAN.md      # DNG 序列 zip 解码(LibRaw)实施计划
-│  ├─ DNGZIP-SAMPLE-NOTES.md      # MotionCam sample DNG 实测记录
-│  └─ APPLELOG-MAPPING-PLAN.md    # Apple Log 映射计划
+│  ├─ INTERFACES.md               # 跨模块接口契约(JNI/spec/数据类)
+│  └─ store-media/                # 应用界面截图
 ├─ sample-luts/                   # identity/teal-orange/golden-hour 示例 LUT
 ├─ scripts/
 │  ├─ build-ffmpeg-android.sh     # NDK 交叉编译 FFmpeg 6.1 + x264/x265/vpx/LibRaw
