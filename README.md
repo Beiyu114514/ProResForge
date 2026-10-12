@@ -1,13 +1,37 @@
 # ProResForge · 转码炉
 
+[![Release](https://img.shields.io/github/v/release/Beiyu114514/ProResForge?label=Release)](https://github.com/Beiyu114514/ProResForge/releases)
+[![License](https://img.shields.io/badge/license-MIT%20source%20%2F%20GPL--3.0%20APK-informational)](#6-许可与合规)
+[![Platform](https://img.shields.io/badge/platform-Android%2024%2B-informational)](https://github.com/Beiyu114514/ProResForge/releases)
+[![隐私](https://img.shields.io/badge/%E9%9A%90%E7%A7%81-%E9%9B%B6%E4%B8%8A%E4%BC%A0-success)](PRIVACY.md)
+
 把 **MotionCam 拍摄 raw → 转出的 Apple ProRes(.mov/.mxf)** 在 Android 手机上直接转码为
 **H.264 / H.265 / VP9 / ProRes 母版**,并可把 **LUT(.cube / .3dl)烘焙进画面**(支持强度 0–100%)。
+
+| 首页(选文件/格式) | 任务页(进度/取消) | 历史页(分享/许可) |
+|:---:|:---:|:---:|
+| ![Home](docs/store-media/01-home.png) | ![Jobs](docs/store-media/02-jobs.png) | ![History](docs/store-media/03-history.png) |
 
 - 硬件编码优先(`h264_mediacodec` / `hevc_mediacodec`),软件兜底(`libx264` / `libx265`)
 - 批量队列:一次选多个文件,后台前台服务逐个转码,通知栏进度,可取消
 - SAF + `detachFd` + `pread/pwrite` 自定义 AVIO:**不拷贝、不占双倍空间**,G 级文件也直接读
 - LUT 前/后单帧预览(JPEG),压缩前先看效果
 - 全 FFmpeg 6.1 本地交叉编译,无任何远程依赖、无隐私上传
+
+## 0. 下载安装
+
+从 [**GitHub Releases**](https://github.com/Beiyu114514/ProResForge/releases/latest) 获取:
+
+| 产物 | 说明 |
+|---|---|
+| `ProResForge-<版本>.apk` | release 签名直装包,双 ABI(arm64-v8a + armeabi-v7a),约 52 MiB |
+| `ProResForge-source-<版本>.zip` | 对应 tag 的完整源码快照(GPL 对应源码,含构建脚本与版本 pin) |
+
+- 要求 Android 7.0+(API 24);arm64 为主目标,32 位设备未经广泛测试
+- 下载后核对 SHA-256(发布页附),手机上直接安装(需允许「未知来源」)
+- 当前渠道只发 GitHub Releases,不上架 Google Play(决策记录:`docs/RELEASE-2026-10-11.md` §C6)。
+  二进制分发同样走 Releases 而非 GitHub Packages(registry 形态不适配 APK 直发,
+  没有为纯二进制引入 Maven/容器包装的必要)
 
 ## 1. 功能一览
 
@@ -159,15 +183,20 @@ ProResForge/
 
 ## 6. 许可与合规
 
-- App 源码:MIT(随仓库 `LICENSE`,可按需替换)
-- 当前构建以 `--enable-gpl --enable-version3` 编译(x264/x265 为 GPL),**发布 APK/商店时需按
-  GPLv3 开放对应 native 源码**。删除 x264/x265 并不能单独形成闭源友好构建；还需关闭 GPL
-  选项并重新核对 FFmpeg、libvpx、libpostproc 与其他依赖的许可证义务。
-- DNG 序列 zip 解码器静态链接 **LibRaw 0.21.4**。LibRaw 适用 LGPL-2.1-or-later/CDDL-1.0
-  双许可；发布二进制时应随附许可证文本、版权声明和源码获取方式。源码使用 LibRaw 0.21.4
-  tag(`https://github.com/LibRaw/LibRaw/tree/0.21.4`)，构建脚本同时使用 `LibRaw-cmake`
-  脚本和 Android NDK sysroot zlib。
+许可结构分两层(与 `app/src/main/assets/licenses/NOTICE.md` 一致,应用内「历史 → 开源许可」可查):
+
+- **App 源码(Kotlin/C++ 本仓库代码):MIT**(`LICENSE`)。
+- **发布的 APK 二进制:整体按 GPL-3.0 分发** —— 构建启用 `--enable-gpl
+  --enable-version3`(x264/x265 为 GPL 组件),因此对外分发的二进制须遵守
+  GPL-3.0。对应源码随每个 Release 以 source zip 形式提供(GPL-3.0 §6(b)
+  书面 offer,有效期至 2029-10-10;详见 NOTICE.md §6)。
+- 想形成闭源友好构建,仅删除 x264/x265 不够;还需关闭 GPL 选项并重新核对
+  FFmpeg、libvpx、libpostproc 与其他依赖的许可证义务。
+- DNG 序列 zip 解码器静态链接 **LibRaw 0.21.4**(LGPL-2.1-or-later / CDDL-1.0
+  双许可,本分发选用 LGPL-2.1);zlib 来自 NDK sysroot(Zlib);libvpx 为
+  BSD-3-Clause。许可证全文随 APK 的 `assets/licenses/` 分发。
 - ProRes 解码器 `prores` 由 FFmpeg 原生提供(LGPL/BSD 视版本),不再依赖 Apple 许可条款。
+- 隐私:`PRIVACY.md` —— 无 INTERNET 权限、不收集、不上传任何数据。
 
 ## 7. 已知限制 & 路线图
 
@@ -191,7 +220,16 @@ ProResForge/
 - arm64 1080p60 900 帧 < 20 分钟;4K 900 帧 < 90 分钟(P50/均衡档)
 - 全程内存按分辨率分档:1080p ≤ 400MB / 4K ≤ 500MB(4096×3072 四线程实测 VmHWM 496MB,
   预算 kBudget=1GB 由「单帧峰值 ≈ rgb×2.95+16MB」反推线程数),900 帧无 OOM;取消在帧边界生效(留残片,与既有行为一致)
-- 既有 .mov/.mxf 回归用例不改动地全过
+- 既有 .mov/.mxf 回归用用例不改动地全过
+
+## 8. 反馈与支持
+
+- **Bug / 功能建议**:[Issues](https://github.com/Beiyu114514/ProResForge/issues)
+  (报告转码失败请附上 `files/logs/app.log` 的相关段落,取法见下方)
+- 应用完全离线、无崩溃上报;排障日志在本机应用私有目录:
+  `adb shell run-as com.proresforge.app cat files/logs/app.log`
+  (或系统文件选择器授权 `Android/data/com.proresforge.app/files/logs/` 后直接取)
+- 安全问题请勿开公开 issue,直接联系维护者
 
 ---
 
