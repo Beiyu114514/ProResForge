@@ -1,0 +1,15 @@
+# 行尾规范化(2026-10-13,source zip CRLF 事故后):
+# - shell 脚本/python/文本类:仓库内一律 LF。git archive(core.autocrlf=true 的
+#   机器)会按本机换行规则转换产物,导致 zip 内 build-ffmpeg-android.sh 变
+#   CRLF、sha256 与 prebuilt/BUILDINFO 的 pin 对不上(发布记录 §5 自警告过的坑,
+#   v1.0.0 source zip 首发即踩中,已用 LF 版重打)。此文件让 archive/checkout
+#   在任何机器上都输出 LF。
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.webp binary
+*.zip binary
+*.apk binary
+*.jar binary
+*.keystore binary
+*.jks binary

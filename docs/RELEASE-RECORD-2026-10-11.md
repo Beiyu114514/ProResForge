@@ -16,7 +16,7 @@
 | 构建时间 | 2026-10-11 09:50 (UTC+8) |
 | 构建命令 | `:app:assembleRelease`(WSL Ubuntu-24.04,NDK r27=27.0.12077973,AGP + gradlew --no-daemon) |
 | native flags | `app/build/native-flags-manifest.txt`: buildType=Release,`-DCMAKE_BUILD_TYPE=Release -DPRF_PRORES_THREADS=3 -DPRF_AVFRAME_POOL=0`(prfWriteNativeFlagsManifest 自查门禁通过) |
-| 源码快照 | `dist/ProResForge-source-v1.0.0.zip`(git archive tag `v1.0.0` = 提交 9492a3f,含 build-ffmpeg-android.sh、BUILDINFO、双 ABI libraw-manifest、README、PRIVACY.md;不含任何 keystore/凭据) |
+| 源码快照 | `dist/ProResForge-source-v1.0.0.zip`(git archive tag `v1.0.0` = 提交 9492a3f,含 build-ffmpeg-android.sh、BUILDINFO、双 ABI libraw-manifest、README、PRIVACY.md;不含任何 keystore/凭据)。**2026-10-13 重打**:首发 zip 在 `core.autocrlf=true` 的 Windows 机上 archive,脚本被转 CRLF、sha256(`416e600f…`)与 BUILDINFO pin(`683d3454…`)不符;已用 `git -c core.autocrlf=false archive` 重打为 LF 版(sha256 `3e731122…f1182ae`,zip 内脚本 sha 与 pin 一致)并替换 Release 资产;仓库加 `.gitattributes`(text=auto eol=lf)防复发 |
 | GPL offer | NOTICE.md §6:随发布条目提供源码快照 + 书面索取兜底;要约人 ProResForge contributors;有效期至 2029-10-10(≥3 年) |
 
 ## 2. FFmpeg/prebuilt provenance(B1/B4)
