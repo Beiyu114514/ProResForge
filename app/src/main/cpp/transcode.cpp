@@ -1602,6 +1602,17 @@ int run_transcode(const TranscodeParams &params)
     int result = 0;
     int ret = 0;
 
+    // fd 契约 §2:两个 fd 的所有权已从 Kotlin 移交进来,done: 标签统一 close。
+    // 但 spec.parse / build_chain / 分配等任何 bad_alloc 会跳过 done: 的 close
+    // (JNI 入口的 catch 只能收成返回码,无法安全补 close —— 不知道这里关没关)。
+    // FdGuard 兜住异常出口:正常路径 close 后置 -1(守卫变 no-op),两者互斥。
+    // 注意 out_ctx.fd 与 fd_out_owned 是同一个数字:fd_out_owned 置 -1 后
+    // fd_io_write 对已关 fd 的写会返回负错误码,不会再有副作用。
+    int fd_in_owned = params.fd_in;
+    int fd_out_owned = params.fd_out;
+    FdGuard fd_in_guard{ &fd_in_owned };
+    FdGuard fd_out_guard{ &fd_out_owned };
+
     // 输入
     AVFormatContext *ic = nullptr;
     FdIoCtx *in_ctx = nullptr;
@@ -3229,9 +3240,10 @@ loop_error:
 done:
     // ---------------- 统一清理 ----------------
     // fd 是 Kotlin detachFd() 移交过来的所有权(契约 §2),native 用完必须 close;
-    // 此处是函数唯一出口,关闭一次即可。
-    if (params.fd_in >= 0) close(params.fd_in);
-    if (params.fd_out >= 0) close(params.fd_out);
+    // 此处是正常路径唯一出口:close 后置 -1(函数入口的 FdGuard 随之变 no-op,
+    // 异常出口由守卫兜底),绝不 double-close。
+    if (fd_in_owned >= 0) { close(fd_in_owned); fd_in_owned = -1; }
+    if (fd_out_owned >= 0) { close(fd_out_owned); fd_out_owned = -1; }
     if (oc) avformat_free_context(oc);
     fd_io_free_avio(&out_pb, &out_buf);
     fd_io_free_input(&ic, &in_ctx, &in_pb, &in_buf);

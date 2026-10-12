@@ -30,8 +30,13 @@ class MediaProbe(private val context: Context) {
         val info = try {
             FFmpeg.nativeInfo(opened.first, opened.second)
         } catch (t: Throwable) {
-            // native 没接手 fd(如 .so 未就绪),这里自关防泄漏;正常路径由 native close
-            runCatching { android.os.ParcelFileDescriptor.adoptFd(opened.first).close() }
+            // native 已保证 exactly-once close:collect_media_info 入口有 FdGuard,
+            // 异常路径也由 native 关(fd 关闭后这里绝不能再碰,close 一个可能已被
+            // 系统复用的 fd 号会误关别的线程的文件)。唯一例外是 .so 未加载
+            // (UnsatisfiedLinkError):native 代码从未执行,fd 还在我们手上,自关。
+            if (t is UnsatisfiedLinkError) {
+                runCatching { android.os.ParcelFileDescriptor.adoptFd(opened.first).close() }
+            }
             AppLog.e(TAG, "probe nativeInfo 异常", t)
             ""
         }
@@ -74,7 +79,11 @@ class MediaProbe(private val context: Context) {
                 dngQuality, dngColor, dngMap
             )
         } catch (t: Throwable) {
-            runCatching { android.os.ParcelFileDescriptor.adoptFd(opened.first).close() }
+            // 同 probe:只有 .so 未加载(native 从未执行)才自关;render_preview_jpeg
+            // 入口有 FdGuard,异常路径也由 native close。
+            if (t is UnsatisfiedLinkError) {
+                runCatching { android.os.ParcelFileDescriptor.adoptFd(opened.first).close() }
+            }
             null
         }
     }

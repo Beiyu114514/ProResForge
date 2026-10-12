@@ -78,8 +78,10 @@ object AppLog {
 
         val h = handler ?: return
         val now = System.currentTimeMillis()
-        val line = format(level, tag, msg, tr, now)
-        h.post { appendFile(line) }
+        // 格式化挪进 handler 线程执行:ts(SimpleDateFormat)非线程安全,在调用方
+        // 线程(主线程/IO 协程并发)跑 format() 可能抛异常直接打崩调用方;handler
+        // 线程天然串行,顺带免去调用方的格式化开销。
+        h.post { appendFile(format(level, tag, msg, tr, now)) }
     }
 
     private fun format(level: Int, tag: String, msg: String, tr: Throwable?, now: Long): String {

@@ -3,6 +3,7 @@ package com.proresforge.app.data
 import com.proresforge.app.fakeUri
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -65,10 +66,10 @@ class JobStoreCompatTest {
         audio = AudioMode.COPY, tenBit = false, faststart = true,
     )
 
-    private fun record(id: String, outSize: Long = 2L) = JobRecord(
+    private fun record(id: String, outSize: Long = 2L, endedAt: Long = 2L) = JobRecord(
         id = id, spec = spec(), state = JobState.DONE, pct = 100,
         stage = "done", frame = 0L, totalFrames = 0L, error = null,
-        startedAt = 1L, endedAt = 2L, outSize = outSize, inSize = 1L, durationMs = 3L
+        startedAt = 1L, endedAt = endedAt, outSize = outSize, inSize = 1L, durationMs = 3L
     )
 
     // ------------------------------------------------------------------ S-3 坏档
@@ -171,5 +172,33 @@ class JobStoreCompatTest {
         store.clear()
         assertTrue(store.history.value.isEmpty())
         assertEquals("[]", File(dir, "jobs.json").readText())
+    }
+
+    // ------------------------------------------------------------------ MAX_ITEMS 上限(第 11 轮审查 §11)
+
+    @Test
+    fun recordFinishTruncatesHistoryAtMaxItems() = runBlocking {
+        val dir = tmp.newFolder()
+        val store = storeIn(dir)
+        awaitHistory(store) { true }
+
+        // 写 MAX_ITEMS + 1 条(endedAt 递增 = ts 递增,最先写的最旧)。
+        // recordFinish 是「新条目插到最前 + take(MAX_ITEMS)」:第 201 条进、
+        // 最旧的 job-000 淘汰,总量恒为 200。
+        repeat(JobStore.MAX_ITEMS + 1) { i ->
+            store.recordFinish(record("job-%03d".format(i), endedAt = 1000L + i))
+        }
+
+        val ids = store.history.value.map { it.id }
+        assertEquals(JobStore.MAX_ITEMS, ids.size)
+        assertFalse("最旧一条应被淘汰", ids.contains("job-000"))
+        assertEquals("新条目在最前", "job-200", ids.first())
+        assertEquals("次旧一条保留", "job-001", ids.last())
+
+        // 落盘的也是截断后的列表(不是只在内存里截)
+        val second = storeIn(dir)
+        val reloaded = awaitHistory(second) { it.size == JobStore.MAX_ITEMS }
+        assertEquals(ids, reloaded.map { it.id })
+        assertFalse(reloaded.map { it.id }.contains("job-000"))
     }
 }

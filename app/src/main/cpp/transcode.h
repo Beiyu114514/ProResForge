@@ -18,6 +18,7 @@
 #include <atomic>
 #include <cstdint>
 #include <string>
+#include <unistd.h>   // close(fd),FdGuard 用
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -26,6 +27,23 @@ extern "C" {
 }
 
 namespace proresforge {
+
+// ---------------------------------------------------------------------------
+// fd RAII 守卫(由 preview.cpp 的 FdReleaser 抽到共享头;collect_media_info 与
+// run_transcode 的异常路径同样需要,见 native-lib.cpp / transcode.cpp):
+//   fd = 指向「本函数持有的 fd」的指针;析构时 close 并置 -1。
+//   用法:正常路径显式 close(*fd) 并置 -1(守卫随之变 no-op);goto/return 之外
+//   的异常出口(bad_alloc 等跳过清理代码)由析构兜底。两者互斥,绝不
+//   double-close。
+//   典型形态:
+//     int fd_owned = fd;
+//     FdGuard fd_guard{ &fd_owned };
+//     ...  // 正常出口:if (fd_owned >= 0) { close(fd_owned); fd_owned = -1; }
+// ---------------------------------------------------------------------------
+struct FdGuard {
+    int *fd;
+    ~FdGuard() { if (fd && *fd >= 0) { close(*fd); *fd = -1; } }
+};
 
 // Stable return code for a recognized container whose video payload cannot be decoded.
 // Keep this separate from 2, which means the requested output is unsupported.

@@ -283,6 +283,13 @@ std::string collect_media_info(int fd, int64_t length)
     AVIOContext *pb = nullptr;
     uint8_t *buf = nullptr;
 
+    // fd 契约 §2:native 拥有,用完 close。nativeInfo 的 JNI 入口会兜住
+    // bad_alloc 之类的异常(返回空串),旧代码的 close 全在正常 return 路径上,
+    // 异常一抛 fd 就漏。FdGuard 兜住所有出口:正常路径 close 后置 -1(守卫
+    // 变 no-op),异常出口由析构 close,绝不 double-close。
+    int fd_owned = fd;
+    proresforge::FdGuard fd_guard{ &fd_owned };
+
     // ---------- DNG 序列 zip(MotionCam,契约 §4.1) ----------
     // 先探 4 字节魔数 PK\x03\x04:命中就走 dngzip,不进 avformat。
     // 不用 tiff.c 解析 DNG:它只交 CFA Bayer(没有 demosaic / 白平衡 / 色彩矩阵),
@@ -299,15 +306,13 @@ std::string collect_media_info(int fd, int64_t length)
                 av_log(nullptr, AV_LOG_WARNING,
                        "nativeInfo: 输入是 zip 但 open 失败:%s(len=%lld)\n", err.c_str(),
                        (long long)length);
-                close(fd);
-                return std::string();
+                return std::string();   // fd 由 fd_guard 关
             }
             const size_t nframes = zip.frame_count();
             if (nframes == 0) {
                 av_log(nullptr, AV_LOG_WARNING,
                        "nativeInfo: zip 里没有 .dng 帧(共 0 帧),按不可解析处理\n");
-                close(fd);
-                return std::string();
+                return std::string();   // fd 由 fd_guard 关
             }
             // 拿宽高:解「第一帧能解开的帧」。首帧可能因为截断/半帧/个别坏帧
             // 解不动,不能因此把整包判死(真机反馈:整包只有首帧有问题时
@@ -340,8 +345,7 @@ std::string collect_media_info(int fd, int64_t length)
                 av_log(nullptr, AV_LOG_ERROR,
                        "nativeInfo: zip 前 %zu 帧全部解不开(DNG 内容损坏或不支持),按不可解析处理\n",
                        probe_max);
-                close(fd);
-                return std::string();
+                return std::string();   // fd 由 fd_guard 关
             }
             Spec kv;
             kv.set("container", "zip");
@@ -398,15 +402,14 @@ std::string collect_media_info(int fd, int64_t length)
             kv.set("cspace", "bt709");
             kv.set("cprim", "bt709");
             kv.set("ctrc", "bt709");
-            // nativeInfo 也拥有输入 fd(契约 §2)
-            close(fd);
+            // nativeInfo 也拥有输入 fd(契约 §2);fd_guard 兜底,正常关一次
+            if (fd_owned >= 0) { close(fd_owned); fd_owned = -1; }
             return join_kv(kv);
         }
     }
 
     if (fd_io_open_input(fd, length, &ic, &ioctx, &pb, &buf) < 0) {
-        close(fd);
-        return std::string();
+        return std::string();   // fd 由 fd_guard 关
     }
 
     // 探测上限(只取头部参数;mov 的编解码/尺寸/旋转/色彩全在 stsd/colr/display matrix):
@@ -523,8 +526,8 @@ std::string collect_media_info(int fd, int64_t length)
     }
 
     fd_io_free_input(&ic, &ioctx, &pb, &buf);
-    // nativeInfo 也拥有输入 fd(契约 §2):用完关闭
-    close(fd);
+    // nativeInfo 也拥有输入 fd(契约 §2):用完关闭;fd_guard 兜住异常出口
+    if (fd_owned >= 0) { close(fd_owned); fd_owned = -1; }
     return join_kv(kv);
 }
 

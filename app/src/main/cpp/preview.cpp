@@ -165,11 +165,9 @@ std::vector<uint8_t> render_preview_jpeg(int fd, int64_t length, int64_t at_us,
     // Kotlin 的 MediaProbe 只在 Java 异常时 close —— 这条路 Java 侧看到的是
     // 正常 null,fd 就漏了)。用栈展开保证 close:goto/return 之前 close 过的
     // fd 在这里记 -1,析构只 close 真正还开着的那个(绝不 double-close)。
+    // (本地 struct 已抽到 transcode.h 的 proresforge::FdGuard,三处共用。)
     int fd_owned = fd;
-    struct FdReleaser {
-        int *fd;
-        ~FdReleaser() { if (fd && *fd >= 0) { close(*fd); *fd = -1; } }
-    } fd_releaser{ &fd_owned };
+    FdGuard fd_releaser{ &fd_owned };
 
     // ------------------------- 输入 / 解码 -------------------------
     int rot_deg = 0;                // 几何旋转角(zip 源没有容器旋转信息,恒 0)

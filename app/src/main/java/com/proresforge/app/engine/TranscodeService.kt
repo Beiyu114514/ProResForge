@@ -29,7 +29,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * 转码前台服务(契约 §7 / §9):串行驱动 [JobBus] 队列。
@@ -211,7 +213,7 @@ class TranscodeService : Service() {
                 withContext(NonCancellable) {
                     if (finalRec != null && recorded.add(nextId)) jobStore.recordFinish(finalRec)
 
-                    // 结束通知(用 NOTIF_ID + 1 起的 jobId 派生 id,错开进度通知且批量不互相覆盖)
+                    // 结束通知(用 NOTIF_ID + 1 起的会话级递增 id,错开进度通知且批量不互相覆盖)
                     when (finalState) {
                         JobState.DONE ->
                             Notifications.done(this@TranscodeService, terminalNotifId(nextId), spec.inputName, spec.outputUri)
@@ -712,16 +714,22 @@ class TranscodeService : Service() {
         const val NOTIF_ID = 1001
 
         /**
-         * 终态通知 id(完成/失败):`NOTIF_ID + 1 + jobId 哈希低 12 位`。
+         * 终态通知 id(完成/失败):会话内单调递增分配,同一 jobId 复用其首次分配值。
          *
          * 为什么不用固定 id:批量(一次多选 N 个文件)时任务一个接一个结束,固定 id 下
          * 「第 N 个的完成通知」会覆盖前 N-1 条,通知栏只剩最后一条(P2-03)。
-         * 按 jobId 派生后每个任务各占一个 id;同一 jobId 只终态一次
-         * (DONE/FAILED 互斥),DONE/FAILED 复用同一 id 也安全,无需再拆两个常量。
-         * 取值域 NOTIF_ID+1 … NOTIF_ID+4096(不与进度通知 1001 冲突)。
+         * 为什么不按 jobId 哈希派生:哈希取值域只有 4096 个,批量重转约 200 条历史时
+         * 按生日界约 5% 概率两条完成通知撞同一 id 互相覆盖(连 PendingIntent 的
+         * requestCode 也被改写)。改为会话级计数器后 id 天然互不碰撞;同一 jobId 只
+         * 终态一次(DONE/FAILED 互斥),map 只防「重试同 id 的极窗口」,规模有界
+         * (上限 = 本会话任务数,清掉旧映射即可防溢出)。
+         * 取值域从 NOTIF_ID+1 起,不与进度通知 1001 冲突。
          */
+        private val terminalNotifIds = ConcurrentHashMap<String, Int>()
+        private val terminalNotifSeq = AtomicInteger(0)
+
         private fun terminalNotifId(jobId: String): Int =
-            NOTIF_ID + 1 + (jobId.hashCode() and 0x0FFF)
+            terminalNotifIds.computeIfAbsent(jobId) { NOTIF_ID + 1 + terminalNotifSeq.incrementAndGet() }
 
         private const val REQ_CANCEL_CURRENT = 2001
 
