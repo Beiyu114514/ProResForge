@@ -427,7 +427,7 @@ android {
 
     // C2(2026-10-11):release 签名凭据只从根目录 keystore.properties(gitignored)
     // 读取;文件不存在时本 config 保持空字段,release 块也不挂 signingConfig ——
-    // 出的是未签名 APK(见 docs/RELEASE-2026-10-11.md 的签名配置说明)。
+    // 出的是未签名 APK(签名配置说明见 docs/RELEASE-SIGNING.md)。
     // 严禁把口令写进本文件或任何入库文件。
     signingConfigs {
         create("release") {
@@ -456,7 +456,8 @@ android {
             // P1-01(2026-10-11):keep 规则已补全(proguard-rules.pro);临时开启 R8
             // 构建+模拟器冒烟六场景通过(探测/转码 rc=0、取消 rc=1 删半成品、历史
             // 序列化/清空/重启持久化,无 ClassNotFound/UnsatisfiedLinkError)。按验证
-            // 步骤回退 false,是否开启留给将来的独立变更(见 docs/RELEASE-SIGNING.md)。
+            // 步骤回退 false,是否开启留给将来的独立变更(前提见下方 C3 注释与
+            // docs/RELEASE-SIGNING.md 的 R8 一节)。
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -464,7 +465,7 @@ android {
             )
             // C2(签名):凭据从根目录 keystore.properties(gitignored)读,
             // 不入库、不硬编码;文件缺失时保持无 signingConfig(可出未签名包,
-            // 供 CI/存档场景),本机出正式包前先按 docs/RELEASE-2026-10-11.md 配好。
+            // 供 CI/存档场景),本机出正式包前先按 docs/RELEASE-SIGNING.md 配好。
             val ksProps = Properties().apply {
                 val f = rootProject.file("keystore.properties")
                 if (f.exists()) f.inputStream().use { load(it) }
@@ -477,8 +478,8 @@ android {
             // 因此在 release buildType 内单独给 CMake configure 追加
             // -DCMAKE_BUILD_TYPE=Release(触发 app/src/main/cpp/CMakeLists.txt 里的
             // -O3 -DNDEBUG 段),assembleDebug 完全不受影响。
-            // 证据:docs/PERF-RAW-TO-PRORES-VERIFIED-2026-10-06.md §3.5(此前 native
-            // 只出过 Debug/-O0)。Debug 保持可调试,不升优化。
+            // 证据(2026-10-06 实测):此前 native 只出过 Debug/-O0,同一段解码热循环
+            // -O0 36.1ms vs -O3 5.6ms(6.4×)。Debug 保持可调试,不升优化。
             //
             // 段D 加固(2026-10-06):这里**只**允许追加 -DCMAKE_BUILD_TYPE=Release 与
             // PRF_* 宏(prfReleaseCmakeArgs,与 app/build/native-flags-manifest.txt 同源),
@@ -534,5 +535,5 @@ dependencies {
 }
 
 // 说明(2026-10-11 更新):release 签名已接入 —— signingConfigs["release"] 从根目录
-// keystore.properties(gitignored)读凭据;本机需按 docs/RELEASE-2026-10-11.md 配置。
+// keystore.properties(gitignored)读凭据;本机需按 docs/RELEASE-SIGNING.md 配置。
 // 仓库不含任何 keystore / 签名凭据,签名文件一律由本机库外保管并保持 ignored。

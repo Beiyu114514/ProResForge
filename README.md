@@ -151,7 +151,7 @@ ProResForge/
 │  ├─ check-contracts.sh          # 契约自检:JNI 数/源清单/runtime 库/spec 键 vs INTERFACES
 │  ├─ gen_sample_luts.py          # 重新生成示例 LUT
 │  ├─ applelog-curve-check.sh     # Apple Log 曲线核对
-│  ├─ transcode_harness.cpp · probe_harness.cpp   # native 侧本地测试桩(不入库)
+│  ├─ transcode_harness.cpp · probe_harness.cpp   # native 侧本地测试桩(已入库)
 │  └─ ...
 └─ app/
    ├─ build.gradle.kts            # app 构建配置(NDK 27 / CMake / Compose)

@@ -46,7 +46,7 @@ DEST="${ROOT}/app/src/main/cpp/prebuilt"           # 安装目标(契约 §6)
 API_LEVEL=24                                       # 契约 §6 / Android minSdk 24
 
 # ---------------------------------------------------------------------------
-# 版本 pin —— 可复现构建(AUDIT-2026-10-06 M-8/N-4)
+# 版本 pin —— 可复现构建(2026-10-06 审计后的加固)
 #
 #   修订前:FFmpeg 跟 n6.1 分支 tip(移动目标,实测产物 libavcodec 60.31.102,而
 #   6.1.0 tag 的版本头是 60.31.100);x264/x265/libvpx/LibRaw-cmake 全部跟上游
@@ -84,7 +84,9 @@ X265_MIRROR="${X265_MIRROR:-https://github.com/videolan/x265.git}"
 VPX_REPO="${VPX_REPO:-https://chromium.googlesource.com/webm/libvpx}"
 VPX_MIRROR="${VPX_MIRROR:-}"
 # LibRaw(DNG 解码:解马赛克 + 相机 WB + 色彩矩阵)。TAG 建议不动,升级前先跑
-# M0 样本核对(docs/DNGZIP-PROGRES-PLAN.md)。
+# M0 样本核对:拿一个真实 MotionCam DNG zip 核对 zipinfo/unzip/exiftool 六项
+# (ZIP64? 帧名模式与数量? 单帧压缩方式 Stored/Deflate? CFA 还是 LinearRaw?
+# WB/色彩 tag? 帧率来源?),确认新版本行为不变再换 —— 升级属独立变更。
 #   主源: LibRaw/LibRaw.git(库源码);LibRaw 官方 README.cmake 里说明 git 快照
 #   不带 CMakeLists(只有发行包有),CMake 脚本在 LibRaw-cmake.git,所以要两个仓库
 #   配合: -S 指向 LibRaw-cmake,-D LIBRAW_PATH 指向 LibRaw 源码。
@@ -193,8 +195,9 @@ clone_once() {
 # verify_pin <dir> <sha | --ref:期望tag>
 #   clone 之后复核 HEAD 与 pin 一致:sha 模式比对 git rev-parse HEAD;
 #   --ref:X 模式比对 git describe --tags --exact-match(用于拿不到 push SHA 的镜像)。
-#   做不到校验(源码目录不是 git 仓)或校验失败都直接 die —— pin 的意义就在于此
-#   (AUDIT M-8:换机 clone 到别的 tip,产物随版本漂移,且无人能发现)。
+#   做不到校验(源码目录不是 git 仓)或校验失败都直接 die —— pin 的意义就在于此:
+#   不 pin 的话换机 clone 到别的 tip,产物随版本漂移,且无人能发现;
+#   pin + verify_pin 使「漂移」从静默变成构建失败。
 verify_pin() {
     local dir="$1" want="$2" got
     if [[ "${want}" == --ref:* ]]; then
@@ -212,7 +215,7 @@ verify_pin() {
 }
 
 # ---------------------------------------------------------------------------
-# LibRaw provenance(来源)manifest —— 段A / AUDIT-2026-10-06 P1-01 + P2-02
+# LibRaw provenance(来源)manifest —— 2026-10-06 审计后的加固
 #
 #   背景:prebuilt/<abi>/lib/libraw.a 以前只看"文件在不在"。存在性检查挡不住两种情况:
 #     a) 单线程版(LibRaw-cmake target raw,带 LIBRAW_NOTHREADS)被当成 libraw.a 装上;
@@ -576,7 +579,7 @@ build_abi() {
     # x265 只在完整 tag clone 时才装 .pc;而我们用 --depth 1 clone,拿不到它的 tag
     # 描述、ffmpeg configure 又靠 pkg-config 找 x265 —— 手写一份(幂等)。
     # Version 取源码 git describe 的真实输出(修订前写死 "4.1",与实际 clone 到哪个
-    # tag 无关,随产物分发时会骗人,AUDIT M-8);X265_BUILD 从装好的
+    # tag 无关,随产物分发时会骗人);X265_BUILD 从装好的
     # x265_config.h 读出来附在 Description 里,便于逐一核对产物版本。
     # 静态库的 C++ 运行时由 ffmpeg configure 的 --extra-libs -lc++_static 承担,
     # 这里不用列。
@@ -787,7 +790,7 @@ EOF
 
     # -----------------------------------------------------------------------
     # 4b.1) 段A provenance(来源)门禁 —— 决定「复用」还是「强制重建」
-    #   背景(REPAIR-PLAN-2026-10-06 §3.1 / AUDIT-2026-10-06 P1-01 + P2-02):
+    #   背景(2026-10-06 审计后的加固):
     #   修订前只看 ${prefix}/lib/libraw.a 在不在:
     #     a) 在 → 跳过本 ABI 的 LibRaw 构建。存在 ≠ 线程安全:LibRaw-cmake 的
     #        target raw(单线程,带 LIBRAW_NOTHREADS)产物也叫 libraw.a,手工把
@@ -914,7 +917,7 @@ EOF
     # 修订前 x264/x265/vpx 缺失只 warn。这个脚本的产出是 proresforge 交叉编译产物的
     # 唯一来源,四个静态库里:libraw.a 决定 DNG 能不能解,另三个决定 H.264/H.265/VP9
     # 能不能编 —— 缺任何一个继续跑只会得到一个"一半的产物"再也没人发现。
-    # 改为 die(AUDIT 收尾项 147)。
+    # 因此缺库直接 die(2026-10-06 审计后从 warn 收紧)。
     for l in x264 x265 vpx raw; do
         if [[ ! -f "${prefix}/lib/lib${l}.a" ]]; then
             die "缺少静态库 lib${l}.a: ${prefix}/lib/lib${l}.a —— 编码能力已不完整,终止构建"
@@ -940,7 +943,7 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# BUILDINFO —— "这批 prebuilt 到底由什么代码/工具链构建的"(AUDIT N-4)
+# BUILDINFO —— "这批 prebuilt 到底由什么代码/工具链构建的"
 #   写 DEST 根一份,内容三半:
 #     1) pin 的实际 commit:源码树的 HEAD(验证过与 pin 一致,但记下来供人核对)
 #     2) 装出来的版本头:grep include/ 里的版本宏 —— 这是"实际证据",

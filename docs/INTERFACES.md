@@ -353,7 +353,15 @@ data class MediaFacts(/* 字段见上表;由 data/MediaProbe.parseInfo 从 nativ
 输入是 MotionCam 拍完导出的 `.zip`: 里面有 ~900 个 `frame-00001.dng`(零填充 5 位),
 单帧 4K/4444XQ 无压缩 DNG ~10MB+ 量级。整条链不落临时文件、不解压到 cacheDir,
 全程内存: SAF fd → ZIP 中央目录解析 → zlib inflate 单帧 → LibRaw → rgb48le AVFrame →
-既有 filtergraph → prores_ks(.mov)。设计取舍见 `docs/DNGZIP-PROGRES-PLAN.md`。
+既有 filtergraph → prores_ks(.mov)。设计取舍(已否决路线的完整分析曾记录于过程文档,
+其结论浓缩如下):
+- **否决「FFmpeg 自带 demuxer」**(§10.1):无 demosaic/WB/色彩矩阵,输出必然偏色;
+- **否决「升 FFmpeg 7.1 用 libraw demuxer」**:破坏 §6 的 6.1 pin,配套(--enable-mediacodec
+  等)全得重验,收益只是少写 ~600 行 glue,zip 容器仍要自己解;
+- **否决「解 zip 到 cacheDir 再交 image2」**:多占一倍磁盘(4K chunk 可达 10GB)、多一次
+  全量 IO,违背 SAF 零拷贝 fd 的立意;
+- **风险预案**:若 MotionCam 新格式 `.mcraw` 成为主要输入,届时再把 dngzip 抽象成
+  内部 FrameSource 接口(open / next_frame / close)接入,transcode.cpp 主流程不动。
 
 ### 10.1 为什么不用 FFmpeg 自带 demuxer
 - FFmpeg 6.1 的 `tiff.c` 对 DNG 只能给 CFA Bayer 帧(`AV_PIX_FMT_BAYER_*16`),没有解马赛克、
@@ -445,7 +453,35 @@ inflate 用 `inflateInit2(&strm, -15)` 裸 deflate,按 1MB pread 喂,`inflateRes
 
 `applelog` 档在 `setsar=1` 后、`format=<out_fmt>` 前插入 `format=gbrp16,lutrgb` 逐通道 Apple Log OETF,
 再用 `scale=out_color_matrix=bt2020nc` 做 RGB→YUV 的 Rec.2020 非恒定亮度矩阵转换。
-Apple Log 曲线常数和数值锚点见 `docs/APPLELOG-MAPPING-PLAN.md` §3.3。
+
+**Apple Log OETF 编码函数**(Apple 白皮书 2023-09 公开常数,不可改动;与 colour-science、
+AMPAS IDT CTL 三方一致):
+
+```
+P = γ·log2(R+β)+δ    若 R ≥ Rt
+P = c·(R−R₀)²        若 R₀ ≤ R < Rt
+P = 0                若 R < R₀
+
+R₀=−0.05641088  Rt=0.01  c=47.28711236  β=0.00964052  γ=0.08550479  δ=0.69336945
+```
+
+- 输入 R 为场景线性反射率(0.18 = 18% 灰卡),与 LibRaw 线性输出的白点归一(clip white =
+  1.0)直接衔接,不需要曝光偏置。
+- 反函数(验证/回归用):`R = 2^((P−δ)/γ) − β`(P ≥ Pt);`R = sqrt(P/c) + R₀`(0 ≤ P < Pt);
+  `Pt = c·(Rt−R₀)² ≈ 0.2085`。
+- 数值锚点(回归期望值,16-bit 码;**核对口径**:输入先按 `round(R·65535)` 量化为 16-bit
+  码 x、以 `x/65535` 进曲线,输出按 `round(P·65535)` 取码 —— 与 lutrgb 在 gbrp16 上的实际
+  行为一致。容差 ±1 LSB):
+
+| 输入码 x | R = x/65535 | P(Apple Log 出) | 期望 16-bit 码 | 备注 |
+|---:|---|---|---:|---|
+| 0 | 0.0 | 0.150476 | 9861 | 抛物线上缘(黑位抬起,符合 Apple 设计) |
+| 655 | ≈0.01(Rt) | 0.208522 | 13665 | 两段在此连续 |
+| 11796 | ≈0.18 | 0.488269 | 31999 | 18% 灰锚点(白皮书/colour-science 一致) |
+| 65535 | 1.0 | 0.694553 | 45518 | clip white;曲线全程 ∈[0,1] 不削顶 |
+
+`scripts/applelog-curve-check.sh` 以本表为期望值核对 filtergraph 实现
+(`transcode.cpp` 内嵌的 lutrgb 表达式);两端任何一处改动跑不通本表即回归。
 
 ### 10.5 预览(`preview.cpp`)
 `nativePreview` 读前 4 字节,`is_zip` 为真走 zip 分支:`atUs` 语义变成**帧下标**

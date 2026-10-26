@@ -141,8 +141,8 @@ configure 阶段新增 **`prf-libraw-gate` 段**:除了老的存在性检查(`RA
 ## 版本 pin(脚本固定,可复现)
 
 `scripts/build-ffmpeg-android.sh` 头部把每个源码都 pin 到发布 tag / 提交 SHA(修订前
-FFmpeg 跟 `n6.1` 分支 tip、其余跟默认分支,换机 clone 即可能产出不同版本;AUDIT-2026-10-06
-M-8),构建前由 `verify_pin()` 复核,不符即终止:
+FFmpeg 跟 `n6.1` 分支 tip、其余跟默认分支,换机 clone 即可能产出不同版本 —— 2026-10-06
+审计正是据此引入 pin + verify_pin),构建前由 `verify_pin()` 复核,不符即终止:
 
 | 库 | pin | 许可证 | 说明 |
 |---|---|---|---|

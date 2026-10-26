@@ -45,30 +45,42 @@ keystore.properties
 .DS_Store
 Thumbs.db
 
-# 内部开发过程、审计、验收及计划文档(公开仓库不入库)
-CODE_REVIEW_*.md
-IMPLEMENTATION_*.md
-VERIFICATION-*.md
-verify-*.md
-FIXLOG-*.md
-AUDIT-*.md
-REVIEW-*.md
-docs/*-PLAN*.md
-docs/*-NOTES*.md
-docs/*-RECORD*.md
-docs/*-CHECKLIST*.md
-docs/*-SIGNING*.md
-docs/REVIEW*.md
+# ---------------------------------------------------------------------------
+# 内部开发过程、审计、验收及计划文档不入库(2026-10-11 清理 38 份过程文档后的规则)
+#   * 规则一(结构性,优先):过程性文档一律放 docs/internal/(整目录忽略);
+#     docs/ 顶层只放公开规范与契约(INTERFACES.md、RELEASE-SIGNING.md 等)。
+#   * 规则二(兜底):docs/ 顶层已知过程文档命名家族仍被忽略,防手滑放错位置;
+#     公开文件需显式 `!` 例外(见下)。新名字家族不会自动被兜底覆盖 ——
+#     请放 docs/internal/,不要靠往这里加模式。
+#   * 规则三:根目录历史命名家族按精确形态忽略,前导斜杠 = 仅匹配根层,
+#     不影响 scripts/、app/ 等深层同名公开文档。
+# ---------------------------------------------------------------------------
+/docs/internal/
+/CODE_REVIEW_*.md
+/IMPLEMENTATION_*.md
+/VERIFICATION-*.md
+/verify-*.md
+/FIXLOG-*.md
+/AUDIT-*.md
+/REVIEW-*.md
+/REVIEW.md
+
+# docs/ 顶层过程文档家族(公开例外:RELEASE-SIGNING.md 是发布操作手册,必须入库)
 docs/AUDIT*.md
 docs/FIXLOG*.md
 docs/FIX-*.md
 docs/PERF-*.md
 docs/PROGRESS-*.md
-docs/RELEASE-*.md
 docs/UI-*.md
 docs/APPLELOG-*.md
 docs/DNGZIP-*.md
 docs/FFMPEG-*.md
+docs/REVIEW*.md
+docs/RELEASE-*.md
+!docs/RELEASE-SIGNING.md
 
-# 本地工具忽略列表(与 .gitignore 双份维护,两者同步更新)
+# 根目录构建日志(过程产物)
+/*.log
+
+# .zcode 本地工具的私有配置(若本机存在则不入库)
 .zcodeignore

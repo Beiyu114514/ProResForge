@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # verify-prebuilt.sh —— prebuilt LibRaw 产物「来源(provenance)」校验器
 #
-# 为什么需要它(段A / AUDIT-2026-10-06 P1-01 + P2-02):
+# 为什么需要它(2026-10-06 审计后的加固):
 #   prebuilt/<abi>/lib/libraw.a 此前只有「存在性」检查,于是两种坏情况都能静默通过:
 #     * 单线程版(LibRaw-cmake target raw,带 LIBRAW_NOTHREADS)被当成 libraw.a 装上;
 #     * 有人把 lib/ 整个目录手工拷进来(prebuilt/BUILDINFO 里就记录过一次
@@ -425,7 +425,7 @@ log "时间: $(ts)"
 log "----------------------------------------------------------------------"
 
 # 行为探针(多线程同一帧解码,输出必须逐字节一致)不在这里做 —— 那是真机/HOST_TEST
-# 验收项,见 docs/PERF-RAW-TO-PRORES-VERIFIED-2026-10-06.md 与段A 计划。
+# 验收项:2T/4T 多轮回合同帧解码 sha 一致(单线程版混入时该探针必失败)。
 if [[ ${FAIL_N} -eq 0 ]]; then
     log "后续仍需覆盖:HOST_TEST/F 段的行为探针(2T/4T 多轮回合同帧解码 sha 一致)。"
     exit 0
