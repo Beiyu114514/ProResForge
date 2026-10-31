@@ -191,8 +191,15 @@ class TranscodeService : Service() {
             // R12-2:先扫描登记、再判断退出 —— stopSelf 之前最后看到的排队任务都
             // 会进 ownedIds(销毁时照样清理);stopSelf 之后新入队的批次不经过任何
             // 扫描,不会被旧实例的 onDestroy 误清。
-            val queued = JobBus.jobs.value.values.filter { it.state == JobState.QUEUED }
-            ownedIds.addAll(queued.map { it.id })
+            val records = JobBus.jobs.value.values
+            val queued = records.filter { it.state == JobState.QUEUED }
+            // R12-2 收口:CANCELLED 一并登记 —— 长任务运行期间「入队即取消」的任务,
+            // 下次扫描时已不是 QUEUED,漏登记会跳过它的终态补录与 0 字节孤儿文档
+            // 清理(R12-12)。补录/补删幂等,上一实例的残留记录被登记也无害。
+            ownedIds.addAll(
+                records.filter { it.state == JobState.QUEUED || it.state == JobState.CANCELLED }
+                    .map { it.id }
+            )
             if (stopRequested) break
             val nextId = queued.firstOrNull()?.id ?: break
             val spec = JobBus.jobs.value[nextId]?.spec ?: continue

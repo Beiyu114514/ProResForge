@@ -470,9 +470,14 @@ fun HomeScreen(modifier: Modifier = Modifier, onOpenJobs: () -> Unit = {}) {
                     } else {
                         val options = FpsMode.standard
                         // R12-10:zip 专属帧率(如 48)不在这份选项里,coerce 只会伪装高亮;
-                        // 把越界选择真正归位,显示才与实际 spec 一致。
-                        LaunchedEffect(state.fps) {
-                            if (state.fps !in options) vm.setFps(FpsMode.ORIG)
+                        // 把越界选择真正归位,显示才与实际 spec 一致。但归位只认「非空且
+                        // 全部探完」的批次:空列表(刚启动)与探测窗口(facts 未就绪)同样
+                        // 落到本分支,提前归位会抹掉用户为 zip 批次选择的/持久化的 48/50。
+                        val allProbed = state.files.all { it.probed }
+                        LaunchedEffect(state.fps, allProbed) {
+                            if (state.files.isNotEmpty() && allProbed && state.fps !in options) {
+                                vm.setFps(FpsMode.ORIG)
+                            }
                         }
                         SegmentedRow(
                             options = options.map { stringResource(it.labelRes) },
