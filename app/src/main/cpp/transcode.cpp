@@ -1349,7 +1349,9 @@ EncPumpHow enc_send_retry(AVCodecContext *ec, AVFormatContext *oc, AVStream *ost
         bool wrote = false, wr_failed = false;
         ret = enc_drain_write(ec, oc, ost, pk, &wrote, &wr_failed);
         if (ret == AVERROR_EOF) return kPumpEof;
-        if (ret < 0) {
+        // EAGAIN 是「排空到头、本轮无包」的正常出口,必须落进下方零进展计数;
+        // 当成致命错误会让 stall 重试成为不可达死代码(R12-3 验收发现)。
+        if (ret < 0 && ret != AVERROR(EAGAIN)) {
             *err = ret;
             return wr_failed ? kPumpWriteErr : kPumpRecvErr;
         }
