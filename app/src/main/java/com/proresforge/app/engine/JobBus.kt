@@ -207,15 +207,23 @@ object JobBus {
      *
      * 终态守卫:记录已经是终态时不再改写。否则「用户点了取消 → nativeRun 返回 0」
      * 会把 CANCELLED 覆盖成 DONE,Service 据此弹出「完成」通知,而用户看到的是取消。
+     *
+     * @return 终态落定后的记录(已是终态则原样返回;id 不存在为 null)。
+     *   R12-13:调用方落库/发通知一律用返回值,不得再回读 [jobs] 活值 ——
+     *   否则与 UI 的 clearFinished 竞态时记录可能刚被清掉,历史写入被跳过。
      */
-    fun finish(id: String, state: JobState, error: String?, outSize: Long, durationMs: Long, inSize: Long = 0L) {
+    fun finish(id: String, state: JobState, error: String?, outSize: Long, durationMs: Long, inSize: Long = 0L): JobRecord? {
         val ended = System.currentTimeMillis()
+        var result: JobRecord? = null
         synchronized(lock) {
             _jobs.update { map ->
                 val rec = map[id] ?: return@update map
-                if (rec.state.isTerminalState()) return@update map
+                if (rec.state.isTerminalState()) {
+                    result = rec
+                    return@update map
+                }
                 val next = LinkedHashMap(map)
-                next[id] = rec.copy(
+                val updated = rec.copy(
                     state = state,
                     error = error,
                     outSize = outSize,
@@ -223,10 +231,13 @@ object JobBus {
                     durationMs = durationMs,
                     endedAt = ended
                 )
+                next[id] = updated
+                result = updated
                 next
             }
             if (_currentId.value == id) _currentId.value = null
         }
+        return result
     }
 
     /**
@@ -235,18 +246,30 @@ object JobBus {
      * R10-9:runJob 现在在 nativeRun 返回后、statSize 之前就提前 finish(DONE)
      * (销毁窗口的成功保护),而 [finish] 有终态守卫、不会二次写入,文件大小只能
      * 走这一条单独通道补。仅对 DONE 有意义;取消/失败的任务大小本就是 0,no-op。
+     *
+     * @return 更新后的记录(守卫拒绝时原样返回;id 不存在为 null),语义同 [finish]。
      */
-    fun updateOutSize(id: String, outSize: Long) {
+    fun updateOutSize(id: String, outSize: Long): JobRecord? {
+        var result: JobRecord? = null
         synchronized(lock) {
             _jobs.update { map ->
                 val rec = map[id] ?: return@update map
-                if (rec.state != JobState.DONE) return@update map
-                if (rec.outSize == outSize) return@update map
+                if (rec.state != JobState.DONE) {
+                    result = rec
+                    return@update map
+                }
+                if (rec.outSize == outSize) {
+                    result = rec
+                    return@update map
+                }
                 val next = LinkedHashMap(map)
-                next[id] = rec.copy(outSize = outSize)
+                val updated = rec.copy(outSize = outSize)
+                next[id] = updated
+                result = updated
                 next
             }
         }
+        return result
     }
 
     // ------------------------------------------------------------------ 内部实现

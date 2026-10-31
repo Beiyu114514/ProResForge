@@ -25,12 +25,14 @@ namespace proresforge {
 //   method: 0 = store,8 = deflate
 //   csize / usize: 压缩前后字节数(ZIP64 下也是真实字节数)
 //   lho: 本地文件头在 zip 里的绝对偏移(数据起点要自己按本地头算,见 dngzip.cpp)
+//   crc: 中央目录的 CRC-32(read_frame 读取后校验,R12-6)
 struct DngZipEntry {
     std::string name;
     uint16_t method = 0;
     uint64_t csize = 0;
     uint64_t usize = 0;
     uint64_t lho = 0;
+    uint32_t crc = 0;
 };
 
 class DngZip {

@@ -711,7 +711,13 @@ Java_com_proresforge_app_engine_FFmpeg_nativePreview(JNIEnv *env, jobject thiz, 
         // N-10:GetStringUTFChars 失败(OOM)会返回 null;静默把 lut 当 nullptr 传下去
         // 会按「无 LUT」出图 —— 用户以为调色生效了。明确失败返回 null(无预览)。
         lut = env->GetStringUTFChars(lutPath, nullptr);
-        if (!lut) return nullptr;
+        if (!lut) {
+            // R12-14:fd 所有权在 Kotlin detachFd 时已移交,此刻 render_preview_jpeg
+            // 还没接管(FdGuard 未建立),提前返回必须自己关 —— 与 nativeRun 的
+            // GetStringUTFChars 失败路径一致,否则按「无预览」null 泄漏输入 fd。
+            if (fd >= 0) close(fd);
+            return nullptr;
+        }
     }
 
     // dngq/dngcolor/dngmap 之后必须和转码 spec 一致(N-7),越界由 preview.cpp 退回默认档。

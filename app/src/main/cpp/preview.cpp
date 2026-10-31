@@ -444,6 +444,24 @@ zip_ready:
         else if (rot_deg == 270) descr += "transpose=cclock,";
         else if (rot_deg == 180) descr += "hflip,vflip,";
 
+        // R12-7:applelog 档 LibRaw 出线性 Rec.2020(dngzip.cpp output_color=8),
+        // 曲线由滤镜层烘 —— transcode.cpp build_descr 在进 LUT 前于 16 位域套
+        // lutrgb,预览必须补同一段,否则 DNG 预览偏暗/高反差,违反契约 §2。
+        // 表达式逐字同步自 transcode.cpp(改须两处同改);触发条件同样限定
+        // DNG zip 源 + applelog 映射(与 build_descr 的判定一一对应)。
+        if (zip_src && dng_map == (int)DngMap::APPLE_LOG) {
+            const char *oetf =
+                "if(gte(val/65535,0.01),0.08550479*log(val/65535+0.00964052)/"
+                "0.6931471805599453+0.69336945,47.28711236*pow(val/65535+0.05641088,2))*65535";
+            descr += "format=gbrp16,lutrgb=r='";
+            descr += oetf;
+            descr += "':g='";
+            descr += oetf;
+            descr += "':b='";
+            descr += oetf;
+            descr += "',format=gbrp,";
+        }
+
         if (use_lut) {
             const std::string lut = esc_path(lut_path);
             // n6.1 lut3d 只支持 RGB planar(ARGB/…/GBRP/…/GBRP16),8 位预览转 gbrp
@@ -457,7 +475,9 @@ zip_ready:
                 std::snprintf(op, sizeof(op), "%.4f", intensity);
                 descr += "split=2[a][b];";
                 descr += "[a]lut3d=file=" + lut + ":interp=tetrahedral[ga];";
-                descr += "[b][ga]blend=all_mode=normal:all_opacity=" + std::string(op) + ",";
+                // R12-1:blend 的 all_opacity 作用于第一个输入,LUT 路必须作 top,
+                // 与 transcode.cpp 对应分支([ga][gb])接线同序,否则强度语义互补反转。
+                descr += "[ga][b]blend=all_mode=normal:all_opacity=" + std::string(op) + ",";
             }
         }
 

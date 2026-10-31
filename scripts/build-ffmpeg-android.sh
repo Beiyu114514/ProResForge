@@ -103,6 +103,28 @@ log()  { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m[warn] %s\033[0m\n' "$*" >&2; }
 die()  { printf '\033[1;31m[error] %s\033[0m\n' "$*" >&2; exit 1; }
 
+# sha256_file <file> / sha256_stdin —— 可移植 sha256(macOS 没有 sha256sum,
+# 硬编码它会让 20~40 分钟编译死在校验步);两样都没有就 die,清晰报错。
+sha256_file() {
+    local f="$1"
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "${f}" | awk '{print $1}'
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "${f}" | awk '{print $1}'
+    else
+        die "没有可用的 sha256 工具(需要 sha256sum 或 shasum)—— 无法校验 ${f}"
+    fi
+}
+sha256_stdin() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum | awk '{print $1}'
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 | awk '{print $1}'
+    else
+        die "没有可用的 sha256 工具(需要 sha256sum 或 shasum)"
+    fi
+}
+
 # ---------------------------------------------------------------------------
 # 参数
 # ---------------------------------------------------------------------------
@@ -174,7 +196,25 @@ log "目标 ABI   = ${ABIS[*]}"
 
 JOBS="$(nproc 2>/dev/null || echo 4)"
 
+# fetch_commit_once <dir> <url> <sha> —— 按完整 SHA 取源码。
+#   git clone -b 匹配的是引用名,吃不下提交值(实测 fatal: Remote branch <sha>
+#   not found in upstream origin);GitHub 服务端开了 allowReachableSHA1InWant,
+#   可达提交允许 fetch --depth 1 origin <sha>。失败必须删掉半截 init 目录:
+#   留着 .git 会让下次运行撞上「源码已存在」的跳过,把损坏树当成功复用。
+fetch_commit_once() {
+    local dir="$1" url="$2" sha="$3"
+    git init -q "${dir}" || return 1
+    if git -C "${dir}" fetch -q --depth 1 "${url}" "${sha}" \
+        && git -C "${dir}" checkout -q FETCH_HEAD; then
+        return 0
+    fi
+    rm -rf "${dir}"
+    return 1
+}
+
 # clone_once <dir> <url> <branch|-> <mirror|->
+#   第三个参数是 40 位完整 SHA 时改走 fetch_commit_once(clone_once 的调用方里
+#   只有 LibRaw-cmake 这么 pin;tag/分支名照旧走 clone -b)。
 clone_once() {
     local dir="$1" url="$2" branch="$3" mirror="$4"
     if [[ -d "${dir}/.git" ]]; then
@@ -182,6 +222,16 @@ clone_once() {
         return 0
     fi
     mkdir -p "$(dirname "${dir}")"
+    if [[ "${branch}" =~ ^[0-9a-fA-F]{40}$ ]]; then
+        log "fetch ${url} @ ${branch}"
+        if ! fetch_commit_once "${dir}" "${url}" "${branch}"; then
+            if [[ "${mirror}" == "-" ]]; then die "fetch 失败: ${url} @ ${branch}"; fi
+            warn "主源失败,改用镜像 ${mirror}"
+            fetch_commit_once "${dir}" "${mirror}" "${branch}" \
+                || die "fetch 失败: ${url} / ${mirror} @ ${branch}"
+        fi
+        return 0
+    fi
     local args=(clone --depth 1)
     if [[ "${branch}" != "-" ]]; then args+=(-b "${branch}"); fi
     log "clone ${url}"
@@ -243,8 +293,9 @@ ndk_revision() {
 }
 
 # nm_symbols_sha <lib> <llvm-nm> —— 存档内全量 defined symbol 规范化 sha256
-#   流水线必须与 scripts/verify-prebuilt.sh:normalize_symbols_sha() 一字不差,
-#   否则"复算一致"这句话没有意义。llvm-nm 的存档输出是
+#   归一化流水线(nm → 第3列 → sort -u → sha256)必须与
+#   scripts/verify-prebuilt.sh:normalize_symbols_sha() 一致,否则"复算一致"
+#   这句话没有意义。llvm-nm 的存档输出是
 #     canon_600.cpp.o:            <- 成员头行(第 3 列取不到,NF<3,被过滤)
 #     000000000000a000 T __Z7...   <- 符号行:第 3 列就是 mangled 名
 #   排序 + `sort -u` 让符号顺序不影响 sha;符号集合变化(换源码/换参数/换工具链/
@@ -252,7 +303,7 @@ ndk_revision() {
 nm_symbols_sha() {
     local lib="$1" nm="$2"
     "${nm}" --defined-only "${lib}" 2>/dev/null \
-        | awk 'NF>=3 {print $3}' | LC_ALL=C sort -u | sha256sum | awk '{print $1}'
+        | awk 'NF>=3 {print $3}' | LC_ALL=C sort -u | sha256_stdin
 }
 
 # ar_members_sha <lib> <llvm-ar> —— 存档成员清单排序去重后 sha256
@@ -261,7 +312,7 @@ nm_symbols_sha() {
 #    与 symbols_sha256(_TLS 相关符号与函数内 static 版本不同)。)
 ar_members_sha() {
     local lib="$1" ar="$2"
-    "${ar}" t "${lib}" 2>/dev/null | LC_ALL=C sort -u | sha256sum | awk '{print $1}'
+    "${ar}" t "${lib}" 2>/dev/null | LC_ALL=C sort -u | sha256_stdin
 }
 
 # mget <manifest> <key> —— 读一个 key 的值(键不存在 / 重复出现都返回空)
@@ -348,7 +399,7 @@ libraw_provenance_ok() {
     fi
 
     v="$(mget "${mfile}" libraw_sha256 || true)"
-    cur="$(sha256sum "${raw_a}" | awk '{print $1}')"
+    cur="$(sha256_file "${raw_a}")"
     if [[ -z "${v}" ]]; then
         bad+=("manifest 缺字段 libraw_sha256")
     elif [[ "${v}" != "${cur}" ]]; then
@@ -406,7 +457,7 @@ write_libraw_manifest() {
 
     # key=value 行不容忍空白:LIBRAW_PATH 里的源码目录可能带空格,压成一行
     raw_r_flags="$(printf '%s' "${raw_r_flags}" | tr -d '[:space:]')"
-    raw_sha="$(sha256sum "${raw_a}" | awk '{print $1}')"
+    raw_sha="$(sha256_file "${raw_a}")"
     syms_sha="$(nm_symbols_sha "${raw_a}" "${nm_bin}")"
     members_sha="$(ar_members_sha "${raw_a}" "${ar_bin}")"
     tls="$(tls_probe "${raw_a}" "${nm_bin}")"
@@ -540,13 +591,27 @@ build_abi() {
     # x265 的 .S 走裸 add_custom_command(clang++ 直接编),不带 --target,NDK r19+
     # 的 clang++ 会按构建机 x86_64 编,必报 "unknown target CPU"。给 arm64 分支补
     # 目标三元组;SVE/dotprod/I8MM 汇编依赖 GNU as 特性,NDK 只有集成汇编器,关掉
-    # (NEON 基础汇编保留)。补丁只打一次(x265 源码树两个 ABI 共用)。
-    if ! grep -q "PRORESFORGE_TARGET_PATCH" "${x265_src}/CMakeLists.txt"; then
-        # macOS/BSD sed 的 -i 必须带备份后缀(GNU 的可省),统一用 -i.bak 再删备份,
-        # 否则脚本在 macOS 上直接报 "sed: -i may not be used with stdin" 中断
-        sed -i.bak "s|elseif(ARM64 OR CROSS_COMPILE_ARM64)|elseif(ARM64 OR CROSS_COMPILE_ARM64) # PRORESFORGE_TARGET_PATCH\n        list(APPEND ARM_ARGS \"--target=${triplet}${API_LEVEL}\")|" \
-            "${x265_src}/CMakeLists.txt"
-        rm -f "${x265_src}/CMakeLists.txt.bak"
+    # (NEON 基础汇编保留)。
+    # 补丁内容随构建轮次的 ABI(--target 三元组)与构建机架构变化,而源码树多个
+    # 轮次共用:标记串把两者都记进去,守卫任一不符就还原重打 —— 否则先跑 x86_64
+    # 轮次注入的 --target 会一直留在 ARM64 分支里,污染后续 arm64 构建。
+    local prf_patch_tag="PRORESFORGE_TARGET_PATCH($(uname -m))"
+    if ! grep -qF "${prf_patch_tag}" "${x265_src}/CMakeLists.txt" \
+        || ! grep -qF -- "--target=${triplet}${API_LEVEL}" "${x265_src}/CMakeLists.txt"; then
+        git -C "${SRC}/x265" checkout -- source/CMakeLists.txt \
+            || die "无法还原 ${x265_src}/CMakeLists.txt(${SRC}/x265 不是可用的 git 树?)"
+        # BSD sed 的替换串里 \n 退化为字面 n(补丁静默失效),改用 awk 逐行插入
+        awk -v prf_marker="${prf_patch_tag}" \
+            -v prf_target_line="        list(APPEND ARM_ARGS \"--target=${triplet}${API_LEVEL}\")" \
+            '!prf_done && /elseif\(ARM64 OR CROSS_COMPILE_ARM64\)/ {
+                print $0 " # " prf_marker
+                print prf_target_line
+                prf_done = 1
+                next
+            }
+            { print }' \
+            "${x265_src}/CMakeLists.txt" > "${x265_src}/CMakeLists.txt.prf" \
+            && mv -f "${x265_src}/CMakeLists.txt.prf" "${x265_src}/CMakeLists.txt"
     fi
     if [[ ! -f "${prefix}/lib/libx265.a" ]]; then
         log "[${abi}] 编译 libx265"
@@ -777,7 +842,8 @@ EOF
     local raw_dir="${SRC}/libraw"
     local raw_cmake_dir="${SRC}/libraw-cmake"
     clone_once "${raw_dir}" "${LIBRAW_REPO}" "${LIBRAW_TAG}" "${LIBRAW_MIRROR}"
-    # LibRaw-cmake 上游没有 tag,与 x264 一样只能 pin 提交 SHA(clone -b <sha>,GitHub 支持)
+    # LibRaw-cmake 上游没有 tag,与 x264 一样只能 pin 提交 SHA(clone_once 见
+    # 完整 SHA 走 init + fetch <sha>;clone -b 只认引用名,吃不下提交值)
     clone_once "${raw_cmake_dir}" "${LIBRAW_CMAKE_REPO}" "${LIBRAW_CMAKE_SHA}" "${LIBRAW_CMAKE_MIRROR}"
     verify_pin "${raw_cmake_dir}" "${LIBRAW_CMAKE_SHA}"
 
@@ -808,7 +874,7 @@ EOF
     #   tmp/ad-stub 单测直接调用它);这里只按返回值决定 skip / force-rebuild。
     # -----------------------------------------------------------------------
     local script_sha ndk_rev mfile gate_out gate_rc=0
-    script_sha="$(sha256sum "${BASH_SOURCE[0]}" | awk '{print $1}')"
+    script_sha="$(sha256_file "${BASH_SOURCE[0]}")"
     ndk_rev="$(ndk_revision)"
     mfile="${prefix}/libraw-manifest-${abi}"
 
@@ -888,8 +954,8 @@ EOF
         # 上面 cp 出来的这个 libraw.a 就是线程安全版(app/src/main/cpp/CMakeLists.txt
         # 固定链这个名字,契约不变);rm 掉 raw_r 的同内容副本,避免 prebuilt 里
         # 留一份没人链的重复静态库、也避免下次 install 踩到陈旧的 raw 产物。
-        sha_ok="$(sha256sum "${prefix}/lib/libraw.a" | awk '{print $1}')"
-        want_rawr="$(sha256sum "${raw_build}/libraw_r.a" | awk '{print $1}')"
+        sha_ok="$(sha256_file "${prefix}/lib/libraw.a")"
+        want_rawr="$(sha256_file "${raw_build}/libraw_r.a")"
         if [[ "${sha_ok}" != "${want_rawr}" ]]; then
             die "LibRaw 安装异常: ${prefix}/lib/libraw.a 与 raw_r 产物不一致(install 未覆盖?)"
         fi
@@ -955,14 +1021,15 @@ EOF
 # ---------------------------------------------------------------------------
 write_buildinfo() {
     local out="${DEST}/BUILDINFO"
-    local ndk_rev
+    local ndk_rev script_sha
     ndk_rev="$(sed -n 's/^Pkg.Revision *= *//p' "${NDK}/source.properties" 2>/dev/null | head -1)"
+    script_sha="$(sha256_file "${BASH_SOURCE[0]}")"
     {
         echo "BUILDINFO —— 由 scripts/build-ffmpeg-android.sh 自动生成,勿手改"
         echo "生成时间:      $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
         echo "构建机:        $(uname -srm 2>/dev/null || echo unknown)"
         echo "脚本:          scripts/build-ffmpeg-android.sh"
-        echo "脚本 sha256:   $(sha256sum "${BASH_SOURCE[0]}" 2>/dev/null | awk '{print $1}')"
+        echo "脚本 sha256:   ${script_sha}"
         echo "NDK:           ${NDK}"
         echo "NDK revision:  ${ndk_rev:-unknown}"
         echo "API level:     ${API_LEVEL}"

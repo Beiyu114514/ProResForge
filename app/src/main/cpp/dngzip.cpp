@@ -203,6 +203,13 @@ inline bool natural_less(const std::string &a, const std::string &b) {
     return (a.size() - i) < (b.size() - j);
 }
 
+// CRC-32 以 8 位十六进制呈现(与 zip 工具/规范的写法对齐,便于对照修复)
+inline std::string hex32(uint32_t v) {
+    char buf[11];
+    std::snprintf(buf, sizeof(buf), "0x%08X", (unsigned)v);
+    return std::string(buf);
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -398,6 +405,7 @@ int DngZip::open(int fd, int64_t len, std::string &err) {
         }
 
         const uint16_t method = rd16(ch + 10);
+        const uint32_t crc32_cd = rd32(ch + 16);
         const uint32_t csize32 = rd32(ch + 20);
         const uint32_t usize32 = rd32(ch + 24);
         const uint16_t nlen = rd16(ch + 28);
@@ -510,6 +518,7 @@ int DngZip::open(int fd, int64_t len, std::string &err) {
         ent.csize = csize;
         ent.usize = usize;
         ent.lho = lho;
+        ent.crc = crc32_cd;
 
         const std::string base_name = basename_of(ent.name);
         bool is_audio = base_name.size() == 9;
@@ -661,6 +670,7 @@ int DngZip::read_frame(size_t i, std::vector<uint8_t> &out, std::string &err) {
             return -1;
         }
         out.resize(ent.usize);
+        uLong crc = crc32(0L, Z_NULL, 0);
         uint64_t left = ent.usize, done = 0;
         while (left > 0) {
             size_t want = (size_t)std::min<uint64_t>(left, kInflateChunk);
@@ -680,8 +690,17 @@ int DngZip::read_frame(size_t i, std::vector<uint8_t> &out, std::string &err) {
                 out.clear();
                 return -1;
             }
+            crc = crc32(crc, out.data() + done, want);
             done += want;
             left -= want;
+        }
+        if ((uint32_t)crc != ent.crc) {
+            err = "zip 第 " + std::to_string(ordinal) + " 帧(" + ent.name +
+                  ")解压失败: CRC-32 不符(期望 " + hex32(ent.crc) +
+                  ", 实际 " + hex32((uint32_t)crc) + ")";
+            av_log(nullptr, AV_LOG_ERROR, "dngzip: %s\n", err.c_str());
+            out.clear();
+            return -1;
         }
         return 0;
     }
@@ -715,6 +734,8 @@ int DngZip::read_frame(size_t i, std::vector<uint8_t> &out, std::string &err) {
 
     std::vector<uint8_t> inbuf(kInflateChunk);
     uint64_t src_done = 0;
+    uint64_t crc_done = 0;
+    uLong crc = crc32(0L, Z_NULL, 0);
     int zrc = Z_OK;
     bool failed = false;
 
@@ -751,6 +772,11 @@ int DngZip::read_frame(size_t i, std::vector<uint8_t> &out, std::string &err) {
         }
 
         zrc = inflate(&zs, Z_NO_FLUSH);
+        const uLong produced = zs.total_out - crc_done;
+        if (produced > 0) {
+            crc = crc32(crc, out.data() + crc_done, (uInt)produced);
+            crc_done += produced;
+        }
         if (zrc == Z_STREAM_END) break;
         if (zrc == Z_OK) {
             if (zs.avail_out == 0) {                   // 解出的比 usize 还多
@@ -804,6 +830,14 @@ int DngZip::read_frame(size_t i, std::vector<uint8_t> &out, std::string &err) {
               std::to_string((unsigned long long)consumed_csize) + ")";
         out.clear();
         av_log(nullptr, AV_LOG_ERROR, "dngzip: %s\n", err.c_str());
+        return -1;
+    }
+    if ((uint32_t)crc != ent.crc) {
+        err = "zip 第 " + std::to_string(ordinal) + " 帧(" + ent.name +
+              ")解压失败: CRC-32 不符(期望 " + hex32(ent.crc) +
+              ", 实际 " + hex32((uint32_t)crc) + ")";
+        av_log(nullptr, AV_LOG_ERROR, "dngzip: %s\n", err.c_str());
+        out.clear();
         return -1;
     }
     return 0;
