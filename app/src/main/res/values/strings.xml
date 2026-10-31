@@ -22,6 +22,7 @@
     <!-- HomeScreen:LUT -->
     <string name="pick_lut">LUT 滤镜</string>
     <string name="lut_pick_action">选择 LUT</string>
+    <string name="lut_format_hint">仅支持 3D LUT（.cube / .3dl）</string>
     <string name="lut_none">不使用 LUT</string>
     <string name="lut_intensity">LUT 强度</string>
     <string name="lut_strength">%1$d%%</string>
@@ -191,7 +192,7 @@
     <!-- HomeViewModel 一次性提示(Snackbar) -->
     <string name="msg_files_picked">已选择 %1$d 个文件</string>
     <string name="msg_lut_loaded">已加载 LUT:%1$s</string>
-    <string name="msg_lut_invalid">LUT 文件解析失败</string>
+    <string name="msg_lut_invalid">LUT 文件解析失败（仅支持 3D LUT）</string>
     <string name="msg_output_dir_updated">输出目录已更新</string>
     <string name="msg_out_create_failed">无法创建输出文件:%1$s</string>
     <string name="msg_queued">已加入转码队列:%1$d 个任务</string>

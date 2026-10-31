@@ -469,6 +469,11 @@ fun HomeScreen(modifier: Modifier = Modifier, onOpenJobs: () -> Unit = {}) {
                         )
                     } else {
                         val options = FpsMode.standard
+                        // R12-10:zip 专属帧率(如 48)不在这份选项里,coerce 只会伪装高亮;
+                        // 把越界选择真正归位,显示才与实际 spec 一致。
+                        LaunchedEffect(state.fps) {
+                            if (state.fps !in options) vm.setFps(FpsMode.ORIG)
+                        }
                         SegmentedRow(
                             options = options.map { stringResource(it.labelRes) },
                             selectedIndex = options.indexOf(state.fps).coerceAtLeast(0),
@@ -506,6 +511,11 @@ fun HomeScreen(modifier: Modifier = Modifier, onOpenJobs: () -> Unit = {}) {
                     ) {
                         Text(stringResource(R.string.lut_pick_action))
                     }
+                    Text(
+                        text = stringResource(R.string.lut_format_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     val lut = state.lut
                     if (lut == null) {
                         Spacer(Modifier.height(8.dp))
@@ -521,7 +531,7 @@ fun HomeScreen(modifier: Modifier = Modifier, onOpenJobs: () -> Unit = {}) {
                         if (grid != null) {
                             FactRow(
                                 stringResource(R.string.fact_lut_grid),
-                                if (lut.is3d) "$grid × $grid × $grid" else "1D · $grid",
+                                "$grid × $grid × $grid",
                             )
                         }
                         FactRow(
@@ -563,8 +573,9 @@ fun HomeScreen(modifier: Modifier = Modifier, onOpenJobs: () -> Unit = {}) {
                     }
                 }
             }
+            }
 
-            // ---------- 7. 音频 ----------
+            // ---------- 8. 音频 ----------
             item {
                 SectionCard(title = stringResource(R.string.audio_title)) {
                     SegmentedRow(
@@ -579,9 +590,7 @@ fun HomeScreen(modifier: Modifier = Modifier, onOpenJobs: () -> Unit = {}) {
                 }
             }
 
-            }
-
-            // ---------- 8. 输出目录 ----------
+            // ---------- 9. 输出目录 ----------
             item {
                 SectionCard(title = stringResource(R.string.output_dir_title)) {
                     val treeMissing = state.outputDirName == null
@@ -603,7 +612,7 @@ fun HomeScreen(modifier: Modifier = Modifier, onOpenJobs: () -> Unit = {}) {
                 }
             }
 
-            // ---------- 9. 开始转码 ----------
+            // ---------- 10. 开始转码 ----------
             item {
                 val startHint = when {
                     state.busy -> null

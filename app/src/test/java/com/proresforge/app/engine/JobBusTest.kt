@@ -266,6 +266,38 @@ class JobBusTest {
         assertEquals(JobState.CANCELLED, record(c).state)
     }
 
+    // ---------------------------------------------------- R12-13 finish/updateOutSize 原子回传
+
+    @Test
+    fun finishReturnsFinalRecordWithoutRereading() {
+        // finish 返回终态落定后的记录,调用方落库直接用它,不再回读 jobs 活值
+        // (否则与 clearFinished 竞态时记录刚被清掉,持久历史写入被跳过)。
+        val id = enqueueOne("ret")
+        JobBus.begin(id)
+        val rec = JobBus.finish(id, JobState.DONE, null, 123L, 5L, 456L)
+        assertEquals(JobState.DONE, rec?.state)
+        assertEquals(123L, rec?.outSize)
+        assertEquals(456L, rec?.inSize)
+        // 终态守卫:已终态时原样返回,不被覆盖
+        val again = JobBus.finish(id, JobState.FAILED, "boom", 0L, 1L, 1L)
+        assertEquals(JobState.DONE, again?.state)
+    }
+
+    @Test
+    fun updateOutSizeReturnsUpdatedRecord() {
+        val id = enqueueOne("ret2")
+        JobBus.begin(id)
+        JobBus.finish(id, JobState.DONE, null, 0L, 1L, 1L)
+        assertEquals(4242L, JobBus.updateOutSize(id, 4242L)?.outSize)
+        // 非 DONE:原样返回,不改写状态与大小
+        val c = enqueueOne("ret3")
+        JobBus.begin(c)
+        JobBus.finish(c, JobState.CANCELLED, null, 0L, 1L, 0L)
+        val rec = JobBus.updateOutSize(c, 9L)
+        assertEquals(JobState.CANCELLED, rec?.state)
+        assertEquals(0L, rec?.outSize)
+    }
+
     @Test
     fun terminalStateCoversDurations() {
         assertFalse(JobState.QUEUED.isTerminalState())

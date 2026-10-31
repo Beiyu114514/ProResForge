@@ -13,15 +13,16 @@ import java.security.MessageDigest
 /**
  * 暂存到 cacheDir 的 LUT 信息。
  * - path:cacheDir/luts/<sha256(uri)>.<ext> 绝对路径(传给 FFmpeg 的 lut= 行 / nativePreview)
- * - title:文件里的 TITLE(没有则 null);size:LUT_3D_SIZE / LUT_1D_SIZE(没有则 null);
- * - bytes:暂存文件字节数;is3d:size 来自 LUT_3D_SIZE/SIZE(true)还是 LUT_1D_SIZE(false)
+ * - title:文件里的 TITLE(没有则 null);size:LUT_3D_SIZE(没有则 null);
+ * - bytes:暂存文件字节数
  * - ext:"cube" / "3dl"(不含点)
  */
-data class StagedLut(val path: String, val title: String?, val size: Int?, val ext: String, val bytes: Long = 0L, val is3d: Boolean = true)
+data class StagedLut(val path: String, val title: String?, val size: Int?, val ext: String, val bytes: Long = 0L)
 
 /**
  * LUT 暂存管理(契约 §2 fd 语义末段 + §8.2)。
- * 只接受 .cube / .3dl;解析头部 TITLE / LUT_3D_SIZE,校验通过后整体拷到
+ * 只接受 3D LUT(.cube / .3dl;1D 表没有渲染路径,带 LUT_1D_SIZE 判非法);
+ * 解析头部 TITLE / LUT_3D_SIZE,校验通过后整体拷到
  * context.cacheDir/luts/<sha256(uri 字符串)>.<ext>,非法返回 null。
  * (注:契约 §8.2 早期表述写过「.dat / sha1」,以这里的实现为准:
  *  <sha256(uri 字符串)>.<ext>。)
@@ -37,7 +38,7 @@ class LutManager(context: Context) {
     private val lutDir: File
         get() = File(appContext.cacheDir, "luts").apply { if (!exists()) mkdirs() }
 
-    /** 暂存;非法(扩展名/无法读取/无 LUT 数据)返回 null。 */
+    /** 暂存;非法(扩展名/1D 表/无法读取/无 LUT 数据)返回 null。 */
     suspend fun stage(uri: Uri): StagedLut? = withContext(Dispatchers.IO) {
         val ext = extensionOf(uri) ?: return@withContext null
 
@@ -82,21 +83,19 @@ class LutManager(context: Context) {
             size = header.size,
             ext = ext,
             bytes = bytes.size.toLong(),
-            is3d = header.is3d,
         )
     }
 
     // ------------------------------------------------------------------ 内部实现
 
-    private data class Header(val valid: Boolean, val title: String?, val size: Int?, val is3d: Boolean = true)
+    private data class Header(val valid: Boolean, val title: String?, val size: Int?)
 
-    /** 解析 LUT 头部:TITLE / LUT_3D_SIZE / LUT_1D_SIZE / SIZE;并用数据行数量兜底校验。 */
+    /** 解析 LUT 头部:TITLE / LUT_3D_SIZE / SIZE(1D 表判非法);并用数据行数量兜底校验。 */
     private fun parseHeader(bytes: ByteArray): Header {
         // 去掉可能的 UTF-8 BOM
         val text = String(bytes, Charsets.UTF_8).trimStart('\uFEFF')
         var title: String? = null
         var size: Int? = null
-        var is3d = true
         var dataLines = 0
         var scanned = 0
         for (raw in text.lineSequence()) {
@@ -111,25 +110,26 @@ class LutManager(context: Context) {
                 "TITLE" ->
                     title = value.trim('"', '\'', ' ').ifEmpty { null }
 
-                "LUT_3D_SIZE", "LUT_1D_SIZE", "SIZE" -> {
+                "LUT_1D_SIZE" ->
+                    // 1D 表没有渲染路径(native 只有 lut3d 一条路),staging 就拒,
+                    // 免得 stage 成功后每个转码/预览必失败。
+                    return Header(valid = false, title = title, size = null)
+
+                "LUT_3D_SIZE", "SIZE" ->
                     size = firstInt(value) ?: size
-                    // U-05:LUT_1D_SIZE 是 1D LUT(只有 SIZE 的 .cube/.3dl 按 3D 处理)
-                    is3d = key != "LUT_1D_SIZE"
-                }
 
                 else ->
                     if (isNumericRow(line) && ++dataLines >= MIN_DATA_LINES && size != null) return Header(
                         valid = true,
                         title = title,
                         size = size.takeIf { it in 2..256 },
-                        is3d = is3d,
                     )
             }
         }
         val saneSize = size?.takeIf { it in 2..256 }
         // 有合理 size → 合法;没有 size 但至少有 MIN_DATA_LINES 行「三个浮点」的数据也放行
         val valid = saneSize != null || dataLines >= MIN_DATA_LINES
-        return Header(valid = valid, title = title, size = saneSize, is3d = is3d)
+        return Header(valid = valid, title = title, size = saneSize)
     }
 
     /** 一行是否 LUT 数据行:至少 3 个可解析为实数的分量(RGB 三元组)。 */

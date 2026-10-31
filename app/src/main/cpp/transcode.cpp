@@ -113,8 +113,9 @@ void clear_cancel_pending()
 
 bool is_cancelled() { return g_cancel.load(std::memory_order_relaxed); }
 
-// R10-5:转码收尾 flush 的连续「零进展」轮数上限。零进展 = send_frame(NULL)
-// 返回 EAGAIN、紧接着 receive_packet 也是 EAGAIN、且这一个包都没写出去。
+// R10-5:连续「零进展」轮数上限,收尾 flush 与主路径 encode_out(R12-3)共用。
+// 零进展 = send_frame 被 EAGAIN 拒绝、紧接着 receive_packet 也是 EAGAIN、
+// 且这一个包都没写出去。
 // 符合约定的编码器在 send EAGAIN 时 receive 应吐包;硬件编码器异步取缓冲时
 // 两边同时 EAGAIN 是真实可能的状态,但把两级 EAGAIN 各自吸收掉才是正确行为 ——
 // 停在「两边同时 EAGAIN 且没有任何包写出」= 零进展,继续等只会把取消拖住
@@ -1270,6 +1271,133 @@ struct Pipe {
     Reporter rep;
 };
 
+// ---------------------------------------------------------------------------
+// 编码器 send/drain/flush 共用核心(R12-3 修复 + 三处 flush 收敛)
+// ---------------------------------------------------------------------------
+// R10-5(:116-123)已论证:「send 被 EAGAIN 拒绝、receive 也 EAGAIN、无包写出」
+// 是硬件编码器的正常瞬态,连续多轮零进展才是真死。此前只有收尾 flush 按
+// kFlushStallLimit 吸收,主路径 encode_out 一轮 EAGAIN 即判死 —— 硬件编码器
+// (h264/hevc_mediacodec)编码中段输入缓冲全满时,健康文件会中途失败。
+// 共用不变量(enc_send_retry / flush_encoder 遵守同一套):
+//   * 每轮先 drain(receive_packet 到 EAGAIN/EOF),写出包 = 有进展,抖动清零;
+//   * send 被 EAGAIN 拒绝时重送同一输入(实帧 pts 已由调用方定好,NULL 即 flush);
+//   * 「send EAGAIN 且本轮一个包都没写出」计一次零进展,连续超过 kFlushStallLimit
+//     轮才判致命(*err = AVERROR(EAGAIN),真实负错误,不把截断输出报成成功)。
+
+// drain 结果类别。Recv/Write 分开只为 encode_out 的日志口径(收尾 flush 两者
+// 同路由);EOF 只说明编码器已进入完成态,不是错误。
+enum EncPumpHow {
+    kPumpOk = 0,     // 输入已被编码器接受
+    kPumpEof,        // drain 中收到 EOF
+    kPumpSendErr,    // send 返回真实负错误(*err;EOF 除外)
+    kPumpRecvErr,    // drain 的 receive_packet 失败(*err)
+    kPumpWriteErr,   // drain 的写盘失败(*err)
+    kPumpStall,      // 零进展触顶(*err = AVERROR(EAGAIN))
+    kPumpCancel,     // cancel_check=true 且 g_cancel 置位
+};
+
+// 排空编码器已就绪的包并逐包写出(rescale + stream_index + 写盘)。
+// 返回最后一次 avcodec_receive_packet 的返回值(EAGAIN/EOF)或首个负错误;
+// wrote(可空)带「本轮是否写出过包」(零进展判定),wr_failed(可空)标记
+// 负错误来自写盘而非 receive(encode_out 的日志区分用)。
+int enc_drain_write(AVCodecContext *ec, AVFormatContext *oc, AVStream *ost,
+                    AVPacket *pk, bool *wrote, bool *wr_failed)
+{
+    if (wrote) *wrote = false;
+    if (wr_failed) *wr_failed = false;
+    while (true) {
+        int ret = avcodec_receive_packet(ec, pk);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) return ret;
+        if (ret < 0) {
+            av_packet_unref(pk);
+            return ret;
+        }
+        av_packet_rescale_ts(pk, ec->time_base, ost->time_base);
+        pk->stream_index = ost->index;
+        ret = av_interleaved_write_frame(oc, pk);
+        av_packet_unref(pk);
+        if (ret < 0) {
+            if (wr_failed) *wr_failed = true;
+            return ret;
+        }
+        if (wrote) *wrote = true;
+    }
+}
+
+// 把 send_input(实帧或 flush 的 NULL)送进编码器,被 EAGAIN 拒绝时按上述
+// 不变量排空重试。cancel_check:flush 期间主循环取消点已过,必须自己看
+// g_cancel(否则取消按不下去);encode_out 的取消点在主循环下一轮,传 false。
+EncPumpHow enc_send_retry(AVCodecContext *ec, AVFormatContext *oc, AVStream *ost,
+                          AVFrame *send_input, AVPacket *pk,
+                          bool cancel_check, int *err)
+{
+    int stall = 0;
+    while (true) {
+        if (cancel_check && g_cancel.load(std::memory_order_relaxed)) {
+            *err = 0;
+            return kPumpCancel;
+        }
+        int ret = avcodec_send_frame(ec, send_input);
+        if (ret != AVERROR(EAGAIN)) {
+            if (ret < 0 && ret != AVERROR_EOF) {
+                *err = ret;
+                return kPumpSendErr;
+            }
+            // 0(或理论上可能的 EOF):输入通道已了结,尾包交给调用方收尾 drain
+            return kPumpOk;
+        }
+        bool wrote = false, wr_failed = false;
+        ret = enc_drain_write(ec, oc, ost, pk, &wrote, &wr_failed);
+        if (ret == AVERROR_EOF) return kPumpEof;
+        if (ret < 0) {
+            *err = ret;
+            return wr_failed ? kPumpWriteErr : kPumpRecvErr;
+        }
+        if (!wrote) {
+            if (++stall > kFlushStallLimit) {
+                *err = AVERROR(EAGAIN); // 真实负错误,不是「成功」
+                return kPumpStall;
+            }
+        } else {
+            stall = 0; // 有产出:抖动重新计数
+        }
+    }
+}
+
+// 收尾 flush 助手:视频/AAC 两段成功收尾逐行收敛于此(差异只在编码器/流/包,
+// 由参数带出);类别到 result/goto 的路由由调用方完成,与被替换代码逐项对齐:
+//   kFlushOk       全部尾包已写出
+//   kFlushCancel   g_cancel → result=1(与主循环取消点同一返回码),done
+//   kFlushStall    零进展触顶 → result=AVERROR(EAGAIN),done
+//   kFlushDrainErr receive/写盘失败 → result=*err,done
+//   kFlushSendErr  send_frame(NULL) 真实失败 → result=*err,loop_error(尽力收尾)
+enum EncFlushHow {
+    kFlushOk = 0,
+    kFlushCancel,
+    kFlushStall,
+    kFlushDrainErr,
+    kFlushSendErr,
+};
+
+EncFlushHow flush_encoder(AVCodecContext *ec, AVFormatContext *oc, AVStream *ost,
+                          AVPacket *pk, int *err)
+{
+    EncPumpHow how = enc_send_retry(ec, oc, ost, nullptr, pk, true, err);
+    if (how == kPumpCancel) return kFlushCancel;
+    if (how == kPumpSendErr) return kFlushSendErr;
+    if (how == kPumpStall) return kFlushStall;
+    if (how == kPumpRecvErr || how == kPumpWriteErr) return kFlushDrainErr;
+    // kPumpOk / kPumpEof:输入已了结,补末轮收尾 drain(send 最终被接受后剩余
+    // 的包在此全部写完;EAGAIN/EOF 都算收完)。
+    bool wr_failed = false;
+    int ret = enc_drain_write(ec, oc, ost, pk, nullptr, &wr_failed);
+    if (ret < 0 && ret != AVERROR(EAGAIN) && ret != AVERROR_EOF) {
+        *err = ret;
+        return kFlushDrainErr;
+    }
+    return kFlushOk;
+}
+
 // sframe 里的帧 → 编码 → 写盘(内含 pts 单调化)
 int encode_out(Pipe *p)
 {
@@ -1299,41 +1427,33 @@ int encode_out(Pipe *p)
         return error;
     };
 
-    int ret = avcodec_send_frame(p->enc, f);
-    if (ret == AVERROR(EAGAIN)) {
-        // send_frame 未接受输入时必须先排空编码器再重送同一帧,不能丢帧。
-        while (true) {
-            ret = avcodec_receive_packet(p->enc, p->pkt);
-            if (ret == AVERROR(EAGAIN)) break;
-            if (ret == AVERROR_EOF) return ret;
-            if (ret < 0) return log_encode_error("receive-after-send-eagain", ret);
-            av_packet_rescale_ts(p->pkt, p->enc->time_base, p->vost->time_base);
-            p->pkt->stream_index = p->vost->index;
-            ret = av_interleaved_write_frame(p->oc, p->pkt);
-            av_packet_unref(p->pkt);
-            if (ret < 0) {
-                av_log(nullptr, AV_LOG_ERROR,
-                       "transcode: video mux write failed ret=%d (%s)\n", ret, err_str(ret));
-                return ret;
-            }
-        }
-        ret = avcodec_send_frame(p->enc, f);
+    // R12-3:send 被拒不再一轮判死 —— 与收尾 flush 同一套零进展上限(不变量见
+    // enc_send_retry 注释):每轮 drain,有产出即收,连续超 kFlushStallLimit 轮
+    // 零进展才以真实负错误失败。硬件编码器编码中段「输入缓冲全满 + 输出未就绪」
+    // 的瞬态由此吸收,健康文件不再中途报错。
+    int err = 0;
+    switch (enc_send_retry(p->enc, p->oc, p->vost, f, p->pkt, false, &err)) {
+    case kPumpOk: break;
+    case kPumpEof: return AVERROR_EOF;
+    case kPumpSendErr: return log_encode_error("send_frame", err);
+    case kPumpRecvErr: return log_encode_error("receive-after-send-eagain", err);
+    case kPumpWriteErr:
+        av_log(nullptr, AV_LOG_ERROR,
+               "transcode: video mux write failed ret=%d (%s)\n", err, err_str(err));
+        return err;
+    case kPumpStall: return err; // AVERROR(EAGAIN):log_encode_error 对其静默
+    case kPumpCancel: break;     // cancel_check=false 不可达;按可继续处理
     }
-    if (ret < 0) return log_encode_error("send_frame", ret);
-    while (true) {
-        ret = avcodec_receive_packet(p->enc, p->pkt);
-        if (ret == AVERROR(EAGAIN)) break;
-        if (ret == AVERROR_EOF) return ret;
-        if (ret < 0) return log_encode_error("receive_packet", ret);
-        av_packet_rescale_ts(p->pkt, p->enc->time_base, p->vost->time_base);
-        p->pkt->stream_index = p->vost->index;
-        ret = av_interleaved_write_frame(p->oc, p->pkt);
-        av_packet_unref(p->pkt);
-        if (ret < 0) {
-            av_log(nullptr, AV_LOG_ERROR,
-                   "transcode: video mux write failed ret=%d (%s)\n", ret, err_str(ret));
-            return ret;
-        }
+
+    bool wr_failed = false;
+    int ret = enc_drain_write(p->enc, p->oc, p->vost, p->pkt, nullptr, &wr_failed);
+    if (ret == AVERROR(EAGAIN)) return 0;
+    if (ret == AVERROR_EOF) return ret;
+    if (ret < 0) {
+        if (!wr_failed) return log_encode_error("receive_packet", ret);
+        av_log(nullptr, AV_LOG_ERROR,
+               "transcode: video mux write failed ret=%d (%s)\n", ret, err_str(ret));
+        return ret;
     }
     return 0;
 }
@@ -2276,22 +2396,40 @@ int run_transcode(const TranscodeParams &params)
                     a_ost->codecpar->codec_tag = 0;
                 }
                 a_ost->time_base = a_ist->time_base;
-                // AAC ADTS → mp4/mov 需要 aac_adtstoasc
+                // AAC ADTS → mp4/mov 需要 aac_adtstoasc。
+                // R12-8:bsf 拿不到/分配/init 失败绝不能静默降级成无 bsf 直通 ——
+                // copy 循环对无 bsf 只有裸 mux,ADTS 帧会原样写进 MP4/MOV 音轨,
+                // trailer 照走、rc=0 报 done,产出音轨不可播放。按「不做隐式回退」
+                // 哲学硬失败;失败出口不在此释放 bsf(统一留给 done: 的
+                // av_bsf_free,杜绝双重释放)。
                 if (aid == AV_CODEC_ID_AAC) {
                     const char *cn = fam->container;
                     if (std::strcmp(cn, "mp4") == 0 || std::strcmp(cn, "mov") == 0 ||
                         std::strcmp(cn, "ipod") == 0 || std::strcmp(cn, "m4v") == 0) {
                         const AVBitStreamFilter *f = av_bsf_get_by_name("aac_adtstoasc");
-                        if (f) {
-                            if (av_bsf_alloc(f, &bsf) == 0) {
-                                if (avcodec_parameters_copy(bsf->par_in, a_ist->codecpar) == 0 &&
-                                    av_bsf_init(bsf) == 0) {
-                                    // ok
-                                } else {
-                                    av_bsf_free(&bsf);
-                                    bsf = nullptr;
-                                }
-                            }
+                        if (!f) {
+                            av_log(nullptr, AV_LOG_ERROR,
+                                   "transcode: aac_adtstoasc bsf not available in this "
+                                   "build, cannot copy AAC into %s\n", cn);
+                            result = AVERROR_BSF_NOT_FOUND;
+                            goto done;
+                        }
+                        ret = av_bsf_alloc(f, &bsf);
+                        if (ret < 0) {
+                            av_log(nullptr, AV_LOG_ERROR,
+                                   "transcode: aac_adtstoasc bsf alloc failed ret=%d (%s)\n",
+                                   ret, err_str(ret));
+                            result = ret;
+                            goto done;
+                        }
+                        ret = avcodec_parameters_copy(bsf->par_in, a_ist->codecpar);
+                        if (ret == 0) ret = av_bsf_init(bsf);
+                        if (ret < 0) {
+                            av_log(nullptr, AV_LOG_ERROR,
+                                   "transcode: aac_adtstoasc bsf init failed ret=%d (%s)\n",
+                                   ret, err_str(ret));
+                            result = ret;
+                            goto done;
                         }
                     }
                 }
@@ -2975,131 +3113,29 @@ int run_transcode(const TranscodeParams &params)
             }
         }
         if (enc) {
-            // send_frame(NULL) 遇 EAGAIN 时先排空已有包，再重送 NULL；否则编码器尾帧
-            // 可能永远不会进入 flush 状态。
-            // R10-5:两级 EAGAIN 各自吸收,但连续「send NULL→EAGAIN 且紧接着 receive
-            // 也是 EAGAIN、一个包都没写出去」计一次零进展(kFlushStallLimit 轮封顶);
-            // 触顶即真实负错误走 done —— 旧代码停在这个状态时 result 仍是 0,
-            // Kotlin 侧看到「成功」,trailer 带着截断的音/视频流被判完成。
-            int flush_stall = 0;
-            while (true) {
-                // 取消点已过主循环:flush 期间自己看 g_cancel,否则取消按不下去。
-                if (g_cancel.load(std::memory_order_relaxed)) {
-                    result = 1; // 与主循环取消点同一返回码(RC_CANCELLED)
-                    goto done;
-                }
-                ret = avcodec_send_frame(enc, nullptr);
-                if (ret != AVERROR(EAGAIN)) break;
-                bool progressed = false; // 本轮是否真的写出过包
-                while (true) {
-                    ret = avcodec_receive_packet(enc, pkt);
-                    if (ret == AVERROR(EAGAIN)) break;
-                    if (ret == AVERROR_EOF) break;
-                    if (ret < 0) {
-                        av_packet_unref(pkt);
-                        result = ret;
-                        goto done;
-                    }
-                    av_packet_rescale_ts(pkt, enc->time_base, v_ost->time_base);
-                    pkt->stream_index = v_ost->index;
-                    ret = av_interleaved_write_frame(oc, pkt);
-                    av_packet_unref(pkt);
-                    if (ret < 0) { result = ret; goto done; }
-                    progressed = true;
-                }
-                if (ret == AVERROR_EOF) break;
-                if (!progressed) {
-                    if (++flush_stall > kFlushStallLimit) {
-                        result = AVERROR(EAGAIN); // 真实负错误,不是「成功」
-                        goto done;
-                    }
-                } else {
-                    flush_stall = 0; // 有产出:抖动重新计数
-                }
-            }
-            if (ret < 0 && ret != AVERROR_EOF) {
-                result = ret;
-                goto loop_error;
-            }
-            while (true) {
-                ret = avcodec_receive_packet(enc, pkt);
-                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
-                // 非 EAGAIN/EOF 的接收错误/写盘失败都必须让 result 变成非 0:
-                // 旧代码在这里 break 后 result 仍是 0,Kotlin 侧看到「成功」,
-                // 于是尾帧丢失但通知却弹「完成」。
-                if (ret < 0) {
-                    av_packet_unref(pkt);
-                    result = ret;
-                    goto done;
-                }
-                av_packet_rescale_ts(pkt, enc->time_base, v_ost->time_base);
-                pkt->stream_index = v_ost->index;
-                ret = av_interleaved_write_frame(oc, pkt);
-                av_packet_unref(pkt);
-                if (ret < 0) {
-                    result = ret;
-                    goto done;
-                }
+            // 收尾 flush(视频):send NULL 被拒时排空重试、零进展封顶、取消自看
+            // 等不变量收敛在 flush_encoder(R10-5/R12-3,见 enc_send_retry 注释)。
+            // 路由与被替换的旧实现逐项对齐:send 失败走 loop_error(尽力写尾),
+            // receive/写盘失败与零进展触顶置 result 后直接 done —— 绝不把截断的
+            // 音/视频流报成「成功」。
+            int ferr = 0;
+            switch (flush_encoder(enc, oc, v_ost, pkt, &ferr)) {
+            case kFlushOk: break;
+            case kFlushCancel: result = 1; goto done; // 与主循环取消点同一返回码
+            case kFlushStall:
+            case kFlushDrainErr: result = ferr; goto done;
+            case kFlushSendErr: result = ferr; goto loop_error;
             }
         }
         if (audio_aac && aenc) {
-            // R10-5:与视频 flush 同形 —— 连续两级 EAGAIN 零进展封顶,取消自己看
-            // g_cancel(主循环的取消点已经走完)。
-            int flush_stall = 0;
-            while (true) {
-                if (g_cancel.load(std::memory_order_relaxed)) {
-                    result = 1; // 与主循环取消点同一返回码(RC_CANCELLED)
-                    goto done;
-                }
-                ret = avcodec_send_frame(aenc, nullptr);
-                if (ret != AVERROR(EAGAIN)) break;
-                bool progressed = false; // 本轮是否真的写出过包
-                while (true) {
-                    ret = avcodec_receive_packet(aenc, apkt);
-                    if (ret == AVERROR(EAGAIN)) break;
-                    if (ret == AVERROR_EOF) break;
-                    if (ret < 0) {
-                        av_packet_unref(apkt);
-                        result = ret;
-                        goto done;
-                    }
-                    av_packet_rescale_ts(apkt, aenc->time_base, a_ost->time_base);
-                    apkt->stream_index = a_ost->index;
-                    ret = av_interleaved_write_frame(oc, apkt);
-                    av_packet_unref(apkt);
-                    if (ret < 0) { result = ret; goto done; }
-                    progressed = true;
-                }
-                if (ret == AVERROR_EOF) break;
-                if (!progressed) {
-                    if (++flush_stall > kFlushStallLimit) {
-                        result = AVERROR(EAGAIN); // 真实负错误,不是「成功」
-                        goto done;
-                    }
-                } else {
-                    flush_stall = 0; // 有产出:抖动重新计数
-                }
-            }
-            if (ret < 0 && ret != AVERROR_EOF) {
-                result = ret;
-                goto loop_error;
-            }
-            while (true) {
-                ret = avcodec_receive_packet(aenc, apkt);
-                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
-                if (ret < 0) {
-                    av_packet_unref(apkt);
-                    result = ret;
-                    goto done;
-                }
-                av_packet_rescale_ts(apkt, aenc->time_base, a_ost->time_base);
-                apkt->stream_index = a_ost->index;
-                ret = av_interleaved_write_frame(oc, apkt);
-                av_packet_unref(apkt);
-                if (ret < 0) {
-                    result = ret;
-                    goto done;
-                }
+            // 收尾 flush(AAC):与视频共用 flush_encoder,差异只在编码器/流/包。
+            int ferr = 0;
+            switch (flush_encoder(aenc, oc, a_ost, apkt, &ferr)) {
+            case kFlushOk: break;
+            case kFlushCancel: result = 1; goto done;
+            case kFlushStall:
+            case kFlushDrainErr: result = ferr; goto done;
+            case kFlushSendErr: result = ferr; goto loop_error;
             }
         }
         if (result == 0) vp.rep(100, "audio", vp.frames);
@@ -3161,21 +3197,14 @@ loop_error:
     // (旧代码在这里置 loop_error,但变量声明已被删——编译器抓到的漏网点,正好删掉。)
     if (result == 0) result = ret;
     if (enc) {
+        // 尽力而为:单次 send + 一轮排空(enc_drain_write),不重试、不看取消;
+        // 错误只在 result 意外为 0 时补填(入口已保证 result != 0,守卫按旧代码保留)。
         ret = avcodec_send_frame(enc, nullptr);
         if (ret >= 0 || ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-            while (true) {
-                ret = avcodec_receive_packet(enc, pkt);
-                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
-                if (ret < 0) {
-                    av_packet_unref(pkt);
-                    if (result == 0) result = ret;
-                    break;
-                }
-                av_packet_rescale_ts(pkt, enc->time_base, v_ost->time_base);
-                pkt->stream_index = v_ost->index;
-                ret = av_interleaved_write_frame(oc, pkt);
-                av_packet_unref(pkt);
-                if (ret < 0) break;
+            ret = enc_drain_write(enc, oc, v_ost, pkt, nullptr, nullptr);
+            if (ret < 0 && ret != AVERROR(EAGAIN) && ret != AVERROR_EOF &&
+                result == 0) {
+                result = ret;
             }
         } else if (result == 0) {
             result = ret;
@@ -3184,19 +3213,10 @@ loop_error:
     if (audio_aac && aenc) {
         ret = avcodec_send_frame(aenc, nullptr);
         if (ret >= 0 || ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-            while (true) {
-                ret = avcodec_receive_packet(aenc, apkt);
-                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
-                if (ret < 0) {
-                    av_packet_unref(apkt);
-                    if (result == 0) result = ret;
-                    break;
-                }
-                av_packet_rescale_ts(apkt, aenc->time_base, a_ost->time_base);
-                apkt->stream_index = a_ost->index;
-                ret = av_interleaved_write_frame(oc, apkt);
-                av_packet_unref(apkt);
-                if (ret < 0) break;
+            ret = enc_drain_write(aenc, oc, a_ost, apkt, nullptr, nullptr);
+            if (ret < 0 && ret != AVERROR(EAGAIN) && ret != AVERROR_EOF &&
+                result == 0) {
+                result = ret;
             }
         } else if (result == 0) {
             result = ret;

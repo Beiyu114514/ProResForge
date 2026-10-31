@@ -210,9 +210,15 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 // busy 覆盖整批探测(名称查询 + 逐个 probe):上一版在这里就 busy=false,
                 // 按钮在探测未完成时可点,而 canStart 又不看 probed,于是用户点下去时
                 // facts 可能还没到位(甚至整批已被新选择取代)。
+                // R12-10:构成从含 zip 变为不含 zip 时,把 zip 专属帧率(F48/F50)归位 ORIG
+                // 并回写 store —— standard 选择器没有这两项,留着会「显示原始帧率、实际 48fps」。
+                var fpsReset = false
                 _state.update {
-                    if (isCurrentProbe(generation)) it.copy(files = picked) else it
+                    if (!isCurrentProbe(generation)) return@update it
+                    fpsReset = it.files.hasDngZip() && !picked.hasDngZip() && it.fps !in FpsMode.standard
+                    it.copy(files = picked, fps = if (fpsReset) FpsMode.ORIG else it.fps)
                 }
+                if (fpsReset) settings.fps = FpsMode.ORIG
                 postMessage(context.getString(R.string.msg_files_picked, picked.size))
                 for (file in picked) {
                     if (!isCurrentProbe(generation)) return@launch
@@ -445,7 +451,14 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
      * 不用重新选一遍整批。探测中的批次照常按 uri 回写,被移除的文件自然跳过。
      */
     fun removeFile(uri: Uri) {
-        _state.update { it.copy(files = it.files.filterNot { f -> f.uri == uri }) }
+        // R12-10:移除后构成从含 zip 变为不含 zip 时,zip 专属帧率归位(同 onFilesPicked)。
+        var fpsReset = false
+        _state.update {
+            val remaining = it.files.filterNot { f -> f.uri == uri }
+            fpsReset = it.files.hasDngZip() && !remaining.hasDngZip() && it.fps !in FpsMode.standard
+            it.copy(files = remaining, fps = if (fpsReset) FpsMode.ORIG else it.fps)
+        }
+        if (fpsReset) settings.fps = FpsMode.ORIG
     }
 
     /** 为每个已选文件生成 JobSpec(outputUri 由 OutputDir 创建)并入队,启动前台服务。 */
@@ -568,6 +581,10 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------- 内部工具 ----------
+
+    /** 选中集合里是否含 DNG 序列 zip(facts 要等 probe,构成判定用扩展名,同 PROBEABLE_EXTENSIONS)。 */
+    private fun List<PickedFile>.hasDngZip(): Boolean =
+        any { it.name.substringAfterLast('.', "").lowercase() == "zip" }
 
     /** 从 contentResolver 读展示名与大小(SAF OpenMultipleDocuments 授予的 uri)。 */
     private fun queryNameSize(uri: Uri): Pair<String, Long> {

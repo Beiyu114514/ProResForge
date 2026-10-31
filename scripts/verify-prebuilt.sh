@@ -38,8 +38,9 @@
 # 期望值覆盖(都比较"manifest 记录值"与"调用方给出的期望值"):
 #   EXPECT_ABI EXPECT_API_LEVEL EXPECT_NDK_REVISION EXPECT_LIBRAW_TAG
 #   EXPECT_LIBRAW_CMAKE_SHA EXPECT_SCRIPT_SHA256 EXPECT_SCRIPT
-#   默认从本仓库 scripts/build-ffmpeg-android.sh 里 READ 当前 pin 与脚本自身 sha,
-#   拿不到就只校验"manifest 自身自洽 + libraw.a 的真实 sha"。
+#   默认从本仓库 scripts/build-ffmpeg-android.sh 里 READ 当前 pin 与脚本自身 sha;
+#   拿不到(且 EXPECT_* 没给全)就显式报错退出 —— 不允许把 pin 校验静默降级成
+#   「非空即过」。
 #
 # 退出码:0 = 全部通过(PASS);1 = 有任一项 FAIL。
 set -uo pipefail
@@ -134,8 +135,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_SCRIPT="${EXPECT_SCRIPT:-${SCRIPT_DIR}/build-ffmpeg-android.sh}"
 
 if [[ ! -f "${BUILD_SCRIPT}" ]]; then
-    for c in "${ROOT:-/nonexistent}/scripts/build-ffmpeg-android.sh" \
-             "${SCRIPT_DIR}/../build-ffmpeg-android.sh" \
+    for c in "${SCRIPT_DIR}/../build-ffmpeg-android.sh" \
              "$(pwd)/scripts/build-ffmpeg-android.sh"; do
         [[ -f "${c}" ]] && BUILD_SCRIPT="${c}" && break
     done
@@ -154,6 +154,14 @@ EXP_CSHA="${EXPECT_LIBRAW_CMAKE_SHA:-$(read_pin LIBRAW_CMAKE_SHA || true)}"
 EXP_SSHA="${EXPECT_SCRIPT_SHA256:-}"
 if [[ -z "${EXP_SSHA}" && -f "${BUILD_SCRIPT}" ]]; then
     EXP_SSHA="$(sha256_file "${BUILD_SCRIPT}" || true)"
+fi
+
+# 修订前:兜底链找不到 build 脚本时,三个 pin 期望值留空,expect_cmp 静默降级成
+# 「非空即过」—— pin 校验形同虚设还没人发现。现在:拿不到就显式失败,写明原因
+# 与补救方式(回仓库内运行 / EXPECT_SCRIPT 指定 / 显式设置 EXPECT_*)。
+if [[ -z "${EXP_TAG}" || -z "${EXP_CSHA}" || -z "${EXP_SSHA}" ]]; then
+    die "无法建立 pin 期望值: build 脚本缺失或读不出 pin(${BUILD_SCRIPT}),且 EXPECT_LIBRAW_TAG / EXPECT_LIBRAW_CMAKE_SHA / EXPECT_SCRIPT_SHA256 未给全(tag=${EXP_TAG:-(空)} cmake_sha=${EXP_CSHA:-(空)} script_sha=${EXP_SSHA:-(空)})。
+       修复:在仓库内运行(默认可找到 scripts/build-ffmpeg-android.sh),或用 EXPECT_SCRIPT=<build 脚本路径> 指定,或显式设置缺失的 EXPECT_* 环境变量。"
 fi
 
 # NDK 期望 revision:Pkg.Revision 读得到才算数(否则只校验 manifest 非空)

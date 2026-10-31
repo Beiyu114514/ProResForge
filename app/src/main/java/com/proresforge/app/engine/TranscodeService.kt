@@ -55,7 +55,9 @@ class TranscodeService : Service() {
         val error: String?,
         val outSize: Long,
         val durationMs: Long,
-        val inSize: Long
+        val inSize: Long,
+        /** R12-13:finish()/updateOutSize() 原子回传的最终记录;早退路径未 finish 时为 null。 */
+        val record: JobRecord? = null
     )
 
     /**
@@ -85,7 +87,18 @@ class TranscodeService : Service() {
     @Volatile
     private var stopRequested = false
 
-    /** API 34 以下 mediaProcessing 前台服务没有系统自动持有的 wake lock,手动补上。 */
+    /**
+     * R12-2:本实例观察/认领过的任务 id。runQueue 每轮扫描把当时还在排队的任务
+     * 全部登记进来;onDestroy 的 finalizeRemainingJobs 只清理这些任务 —— stopSelf
+     * 之后、onDestroy 之前新入队的批次不经过任何扫描,不属于本实例生命周期,
+     * 原样留给下一个服务实例。仅在主线程访问(runQueue 协程与 onDestroy)。
+     */
+    private val ownedIds = mutableSetOf<String>()
+
+    /**
+     * R12-9:系统给 mediaProcessing 前台服务自动持锁要到 Android 15(API 35)才有,
+     * API 34 会掉进空窗 —— 这里 SDK_INT ≤ 35 一律手动补锁(35 起双持无害)。
+     */
     private var wakeLock: android.os.PowerManager.WakeLock? = null
 
     private val resolver get() = applicationContext.contentResolver
@@ -107,7 +120,7 @@ class TranscodeService : Service() {
             rollbackQueuedJobs()
             return
         }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM + 1) {
             wakeLock = (getSystemService(POWER_SERVICE) as android.os.PowerManager)
                 .newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "proresforge:transcode")
                 .apply {
@@ -175,11 +188,13 @@ class TranscodeService : Service() {
         // 已经写过历史的 id(排队期被取消的任务没有 finish() 路径,收尾时补写)
         val recorded = mutableSetOf<String>()
         while (serviceScope.isActive) {
+            // R12-2:先扫描登记、再判断退出 —— stopSelf 之前最后看到的排队任务都
+            // 会进 ownedIds(销毁时照样清理);stopSelf 之后新入队的批次不经过任何
+            // 扫描,不会被旧实例的 onDestroy 误清。
+            val queued = JobBus.jobs.value.values.filter { it.state == JobState.QUEUED }
+            ownedIds.addAll(queued.map { it.id })
             if (stopRequested) break
-            val nextId = JobBus.jobs.value.entries
-                .firstOrNull { it.value.state == JobState.QUEUED }
-                ?.key
-            if (nextId == null) break
+            val nextId = queued.firstOrNull()?.id ?: break
             val spec = JobBus.jobs.value[nextId]?.spec ?: continue
             if (!JobBus.begin(nextId)) continue // 已被取消/移除,跳过
             // K-01:上一任务的取消可能落在「nativeRun 已返回但 finish/落库未完」的窗口,
@@ -193,11 +208,13 @@ class TranscodeService : Service() {
             activeRun = run
             try {
                 val outcome = runJob(nextId, spec, run)
-                // finish() 带终态守卫:运行期被取消时保持 CANCELLED,不会被 outcome.state 覆盖
-                JobBus.finish(nextId, outcome.state, outcome.error, outcome.outSize, outcome.durationMs, outcome.inSize)
-                // 通知/历史按 JobBus 里的最终状态发,而不是 outcome —— 用户点了取消却收到
-                // 「完成」通知(进度对不上)就是这么来的。
-                val finalRec = JobBus.jobs.value[nextId]
+                // R12-13:终态记录由 runJobInner 经 finish()/updateOutSize() 原子回传
+                // (outcome.record),这里只为早退路径(未 finish)补一次 finish;
+                // 不再回读 jobs 活值 —— 否则与 UI「清除已完成」竞态时记录刚被清掉,
+                // 持久历史写入会被跳过而通知照发。finish() 的终态守卫保证运行期被
+                // 取消时保持 CANCELLED,不会被 outcome.state 覆盖。
+                val finalRec = outcome.record
+                    ?: JobBus.finish(nextId, outcome.state, outcome.error, outcome.outSize, outcome.durationMs, outcome.inSize)
                 val finalState = finalRec?.state ?: outcome.state
                 AppLog.i(
                     TAG,
@@ -239,11 +256,25 @@ class TranscodeService : Service() {
         // P2-06:这里也是被取消的 serviceScope 里的普通 suspend 调用 —— 不包
         // NonCancellable 的话,onDestroy 打断 runQueue 时这段补录会被静默跳过。
         withContext(NonCancellable) {
+            val orphanDocs = ArrayList<Uri>()
             JobBus.jobs.value.values.forEach { rec ->
+                // R12-2:只补录本实例生命周期内的任务
+                if (rec.id !in ownedIds) return@forEach
                 val terminal = rec.state == JobState.DONE ||
                     rec.state == JobState.FAILED ||
                     rec.state == JobState.CANCELLED
-                if (terminal && recorded.add(rec.id)) jobStore.recordFinish(rec)
+                if (terminal && recorded.add(rec.id)) {
+                    jobStore.recordFinish(rec)
+                    // R12-12:排队期被取消的任务没有 finish() 路径,入队时预建的
+                    // 0 字节文档在这里补删(非 DONE 即删,与 resolveInterruptedOutcome 同义)
+                    if (rec.state != JobState.DONE) orphanDocs += rec.spec.outputUri
+                }
+            }
+            // SAF 删除不在主线程做(与 finalizeRemainingJobs/rollbackQueuedJobs 同路)
+            if (orphanDocs.isNotEmpty()) {
+                finalizeScope.launch {
+                    for (uri in orphanDocs) deleteOutputDocument(uri)
+                }
             }
         }
         finishQueue()
@@ -462,12 +493,14 @@ class TranscodeService : Service() {
             //   销毁路径便把「native 已返回 0、成品已写完」的任务记成取消并删掉。
             //   finish() 自带终态守卫:运行期用户取消已把记录写成 CANCELLED 时,
             //   这里不会改回 DONE —— 沿用取消并删输出(M-新A 的窗口同理)。
-            JobBus.finish(id, state, error, 0L, elapsed(startedAt), inSize)
+            // R12-13:finish 原子回传终态记录,后续不再回读 jobs 活值 ——
+            // 「清除已完成」竞态下活值可能刚被清掉,回读会拿到 null。
+            val finished = JobBus.finish(id, state, error, 0L, elapsed(startedAt), inSize)
+            val finalState = finished?.state ?: state
 
             // 6) 失败/取消:删掉半截文件;成功:取最终大小。
-            //   以 JobBus 里的最终状态为准(可能已被取消盖掉),保证「删/不删」
+            //   以 finish 回传的最终状态为准(可能已被取消盖掉),保证「删/不删」
             //   与落库状态一致。
-            val finalState = JobBus.jobs.value[id]?.state ?: state
             val outSize = if (finalState == JobState.DONE) {
                 // finish() 的守卫挡住第二次写入,文件大小走单独通道回填
                 try {
@@ -483,9 +516,12 @@ class TranscodeService : Service() {
                 }
                 0L
             }
-            if (finalState == JobState.DONE && outSize > 0L) JobBus.updateOutSize(id, outSize)
+            var finalRec = finished
+            if (finalState == JobState.DONE && outSize > 0L) {
+                finalRec = JobBus.updateOutSize(id, outSize) ?: finished
+            }
 
-            return JobOutcome(finalState, error, outSize, elapsed(startedAt), inSize)
+            return JobOutcome(finalState, error, outSize, elapsed(startedAt), inSize, finalRec)
         }
 
     /** outputUri 是入队前创建的文档;native 未启动时也要清理空文档。 */
@@ -558,7 +594,11 @@ class TranscodeService : Service() {
      * 的任务可能没有历史,还没 begin 的 QUEUED 任务则留着入队时建的 0 字节文档。
      * 统一兜底:已终态 → 补落库(recordFinish 按 id 覆盖,重复写无害,状态取自 JobBus);
      * 仍 QUEUED → 删输出文档 + 移出队列(与 ViewModel 的 K-04 回滚同义:这种任务
-     * 从没开跑,不该留下空文件,也不该伪造一条取消记录冒充跑过)。
+     * 从没开跑,不该留下空文件,也不该伪造一条取消记录冒充跑过 —— R12-11,
+     * 故不落库)。从未开跑即终止的记录同样补删预建文档(R12-12)。
+     *
+     * R12-2:只清理 [ownedIds] 里的任务 —— stopSelf 之后、onDestroy 之前新入队的
+     * 批次不属于本实例生命周期,原样留给下一个服务实例。
      */
     private fun finalizeRemainingJobs() {
         val snapshot = JobBus.jobs.value
@@ -566,6 +606,7 @@ class TranscodeService : Service() {
         val needsRecord = ArrayList<JobRecord>()
         val queuedRecs = ArrayList<JobRecord>()
         for (rec in snapshot.values) {
+            if (rec.id !in ownedIds) continue
             when {
                 rec.state.isTerminalState() -> needsRecord += rec
                 rec.state == JobState.QUEUED -> queuedRecs += rec
@@ -573,13 +614,16 @@ class TranscodeService : Service() {
         }
         if (needsRecord.isEmpty() && queuedRecs.isEmpty()) return
         if (queuedRecs.isNotEmpty()) JobBus.removeQueued(queuedRecs.map { it.id })
-        val all = needsRecord + queuedRecs
         finalizeScope.launch {
-            for (rec in all) {
+            for (rec in queuedRecs) {
+                // 从没开跑:不留 0 字节文档,也不落历史记录(见 KDoc)
+                deleteOutputDocument(rec.spec.outputUri)
+            }
+            for (rec in needsRecord) {
                 runCatching { jobStore.recordFinish(rec) }
                     .onFailure { AppLog.w(TAG, "destroy 兜底落库失败: ${it.message}") }
-                // 未开跑的任务不留 0 字节文档(与 ViewModel 的 K-04 回滚同义)
-                if (rec.state == JobState.QUEUED) deleteOutputDocument(rec.spec.outputUri)
+                // R12-12:非 DONE 即删(与 resolveInterruptedOutcome 同义);DONE 的成品不碰
+                if (rec.state != JobState.DONE) deleteOutputDocument(rec.spec.outputUri)
             }
         }
     }
